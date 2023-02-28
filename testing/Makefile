@@ -11,6 +11,8 @@ INCLUDES+= -I.
 INCLUDES+= -I${_CUDA_ROOT_}/include
 INCLUDES+= -I${_KBLAS_ROOT_}/include -I${_KBLAS_ROOT_}/src
 INCLUDES+= -I${_NLOPT_ROOT_}/include
+INCLUDES+= -I${_GSL_ROOT_}/include
+
 ifdef _USE_MAGMA_
 	INCLUDES+= -I$(_MAGMA_ROOT_)/include
 endif
@@ -25,6 +27,7 @@ LIB_PATH=
 LIB_PATH+= -L${_CUDA_ROOT_}/lib64
 LIB_PATH+= -L${_KBLAS_ROOT_}/lib
 LIB_PATH+= -L${_NLOPT_ROOT_}/lib
+LIB_PATH+= -L${_GSL_ROOT_}/lib
 
 ifdef _USE_MAGMA_
 	LIB_PATH+= -L${_MAGMA_ROOT_}/lib
