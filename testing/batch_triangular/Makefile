@@ -50,7 +50,11 @@ C_SRC_BATCH+=         \
 	test_zpotri_batch.c \
 	test_zpoti_batch.c  \
 	test_zposv_batch.c
-
+C_SRC_BATCH+=		\
+	test_dvecchia_batch.c
+#	test_svecchia_batch.c	\
+#	test_zvecchia_batch.c	\
+#	test_cvecchia_batch.c
 ifdef _SUPPORT_SVD_
 C_SRC_BATCH+= test_dgesvj_batch.c test_sgesvj_batch.c
 
@@ -114,6 +118,12 @@ $(OBJ_DIR)/test_%poti_batch.o: $(KBLAS_BATCH_DIR)/test_Xpoti_batch.cpp $(BATCH_I
 
 $(OBJ_DIR)/test_%posv_batch.o: $(KBLAS_BATCH_DIR)/test_Xposv_batch.cpp $(BATCH_INC_DEP)
 	$(CXX) $(COPTS) -DPREC_$* $(INCLUDES) -c $< -o $@
+
+# $(OBJ_DIR)/test_%ckernel_batch.o: $(KBLAS_BATCH_DIR)/test_ckernel_batch.cpp $(BATCH_INC_DEP)
+# 	$(CXX) $(COPTS) -DPREC_$* $(INCLUDES) -c $< -o $@
+
+$(OBJ_DIR)/test_%vecchia_batch.o: $(KBLAS_BATCH_DIR)/test_Xvecchia_batch.cpp $(BATCH_INC_DEP)
+	$(CXX) $(COPTS) -I/misc/llg.h -DPREC_$* $(INCLUDES) -c $< -o $@
 
 $(BIN_DIR)/test_%_batch: $(OBJ_DIR)/test_%_batch.o
 	$(CXX) $(COPTS) $< -o $@ $(LIB_PATH) $(LIB)

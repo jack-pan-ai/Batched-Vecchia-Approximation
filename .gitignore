@@ -1,2 +1,6 @@
 obj/
 bin/
+.vscode/
+lib/libkblas-gpu.a
+test_cublas
+test_cublas.cpp

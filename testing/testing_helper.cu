@@ -868,6 +868,11 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
   opts->diag      = 'N';    // trsm, etc.
   opts->version    = 1;
 
+  // local theta for kernel in GPs
+  opts->sigma     = 1.;
+  opts->beta     = 0.07;
+  opts->nu     = 1.;
+
   if(argc < 2){
     USAGE
     exit(0);

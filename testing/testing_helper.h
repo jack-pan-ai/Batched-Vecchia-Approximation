@@ -233,6 +233,11 @@ typedef struct kblas_opts
 	char transB;
 	char side;
 	char diag;
+
+  // local theta for kernel in GPs
+  double sigma;
+  double beta;
+  double nu;
 } kblas_opts;
 
 int parse_opts(int argc, char** argv, kblas_opts *opts);
