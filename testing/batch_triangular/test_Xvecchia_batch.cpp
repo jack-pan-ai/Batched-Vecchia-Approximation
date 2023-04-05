@@ -22,6 +22,7 @@
 #include <assert.h>
 #include <math.h>
 #include <sys/time.h>
+#include <ctime>
 
 #if ((defined PREC_c) || (defined PREC_z)) && (defined USE_MKL)
 // TODO need to handle MKL types properly
@@ -57,75 +58,6 @@
 
 #define USING printf("uplo %c, trans %c, batchCount %d, backDoor %d\n", opts.uplo, opts.transA, batchCount, opts.bd);
 
-void printLocations(int N, location *locations)
-{
-    printf("\n---------------------------------\n");
-    for (int i = 0; i < N; i++)
-    {
-        printf("%d th location: (%lf, %lf)\n", i, locations->x[i], locations->y[i]);
-    }
-    printf("-----------------------------------\n");
-}
-
-template <class T>
-void printMatrixCPU(int m, int n, T *h_A, int lda, int i)
-{
-    printf("-------------------------------\n");
-    printf("%d batch of all. (CPU)\n", i);
-    for (int i = 0; i < m; i++)
-    {
-        for (int j = 0; j < n; j++)
-        {
-            // colunm-wised matrix
-            // printf("(%d)", i + j * lda);
-            printf("%lf ", (double)h_A[i + j * lda]);
-            printf(", ");
-        }
-        printf("\n");
-    }
-    printf("-------------------------------\n");
-}
-
-template <class T>
-void printMatrixGPU(int Am, int An, T *d_A, int lda)
-{
-    printf("-------------------------------\n");
-    printf("Convariance matrix in batch. (GPU)\n");
-    T *h_A = (T *)malloc(sizeof(T) * An * lda);
-    cudaMemcpy(h_A, d_A, sizeof(T) * An * lda, cudaMemcpyDeviceToHost);
-    // double sum = 0;
-    for (int i = 0; i < Am; i++)
-    {
-        for (int j = 0; j < An; j++)
-        {
-            // colunm-wised matrix
-            printf("(%d)", i + j * lda);
-            printf("%lf ", (double)h_A[i + j * lda]);
-            // sum += (double)h_A[i + j * lda];
-        }
-        // printf("\n");
-    }
-    // printf("The sum is %lf \n", sum);
-    printf("-------------------------------\n");
-    free(h_A);
-}
-
-template <class T>
-void printVecGPU(int Cm, int Cn, T *d_C, int lda)
-{
-    printf("-------------------------------\n");
-    printf("1st batch of all. (GPU) vector\n");
-    T *h_C = (T *)malloc(sizeof(T) * Cn * lda);
-    cudaMemcpy(h_C, d_C, sizeof(T) * Cn * lda, cudaMemcpyDeviceToHost);
-    for (int i = 0; i < Cm; i++)
-    {
-        printf("(%d)", i);
-        printf("%lf ", (double)h_C[i]);
-    }
-    printf("\n-------------------------------\n");
-    free(h_C);
-}
-
 template <class T>
 int test_Xvecchia_batch(kblas_opts &opts, T alpha)
 {
@@ -154,8 +86,32 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     //  potrf used
     int *d_info[ngpu];
     location *locations;
+    location *locations_con_boundary;
+    // location* locations_con;
+    location* locations_con[opts.batchCount];
     // no nugget
     T *localtheta;
+
+    // vecchia offset
+    T *h_A_copy, *h_A_conditioned, *h_C_conditioned;
+    T *d_A_copy[ngpu], *d_A_conditioned[ngpu], *d_C_conditioned[ngpu];
+    int ldacon, ldccon, Acon, Ccon;
+    int lddacon, lddccon;
+    // used for the store the memory of offsets for mu and sigma
+    T *d_A_offset[ngpu], *d_mu_offset[ngpu];
+    // geam operations
+    T alpha_offset_1 = 1;
+    T alpha_offset_n1 = 1;
+    T alpha_offset_0 = 1;
+    T beta_offset_n1 = -1;
+    T beta_offset_0 = 0;
+    T beta_offset_1 = 1;
+    // T alpha_offset_mu = 0;
+    // T beta_offset_mu = 1;
+    // extra memory for mu, which can be optimized
+    // T *h_mu;
+    // T *d_mu[ngpu], *d_mu_copy[ngpu];
+    T *d_C_copy[ngpu];
 
     double Cnorm;
     T c_one = make_one<T>(),
@@ -194,8 +150,6 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     int NUM_THREADS = opts.omp_numthreads;
 #endif // USE_OPENMP
 
-    // printf("batchCount    N     K     kblasSYRK GF/s (ms)  lapackSYRK GF/s (ms)  SP      Error\n");
-    // printf("==================================================================================\n");
     for (int itest = 0; itest < opts.ntest; ++itest)
     {
         for (int iter = 0; iter < opts.niter; ++iter)
@@ -206,8 +160,8 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                 double gflops, perf,
                     ref_avg_perf = 0.0, ref_sdev_perf = 0.0, ref_avg_time = 0.0,
                     // rec_avg_perf = 0.0, rec_sdev_perf = 0.0, rec_avg_time = 0.0,
-                    kblas_perf = 0.0, kblas_time = 0.0, kblas_time_1 = 0.0, cublas_perf = 0.0, cublas_time = 0.0,
-                    ref_error = 0.0;
+                    kblas_perf = 0.0, kblas_time = 0.0, kblas_time_1 = 0.0, dcmg_time = 0.0,
+                    vecchia_time = 0.0;
 
                 int batchCount = opts.batchCount;
                 if (opts.btest > 1)
@@ -228,6 +182,9 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                 N = opts.nsize[itest];
 
                 fflush(stdout);
+
+                /*
+                flops in total
 
                 if (nonUniform)
                 {
@@ -252,6 +209,7 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                     // used for determinant of triangular matrix
                     gflops += batchCount * FLOPS_GEVV<T>(M) / 1e9;
                 }
+                */
 
                 if (opts.side == KBLAS_Left)
                 {
@@ -266,13 +224,41 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                 ldc = Cm = M;
                 Cn = N;
 
+                // the number of conditioned points
+                if (opts.vecchia_num > M)
+                {
+                    fprintf(stderr, "error: vecchia is invalid; ensure 0 <= vecchia_num <= M.\n");
+                    exit(1);
+                }
+                else if (opts.vecchia_num == 0)
+                {
+                    ldacon = ldccon = Acon = Ccon = M;
+                }
+                else
+                {
+                    ldacon = ldccon = Acon = Ccon = opts.vecchia_num;
+                }
+                lddccon = ((ldccon + 31) / 32) * 32;
+                lddacon = lddccon;
+
                 ldda = ((lda + 31) / 32) * 32;
                 lddc = ((ldc + 31) / 32) * 32;
 
                 sizeA = lda * An;
                 sizeC = ldc * Cn;
+                // used for batched llh
                 TESTING_MALLOC_PIN(h_A, T, lda * An * batchCount);
                 TESTING_MALLOC_PIN(h_C, T, ldc * Cn * batchCount);
+                if (opts.vecchia)
+                {
+                    // used for vecchia offset
+                    // the first batch is no conditioned, but we still need the extra memeory for bound cases
+                    TESTING_MALLOC_PIN(h_A_copy, T, ldacon * Acon * batchCount);
+                    TESTING_MALLOC_PIN(h_A_conditioned, T, ldacon * An * batchCount);
+                    TESTING_MALLOC_PIN(h_C_conditioned, T, ldccon * Cn * batchCount);
+                    // extra memory for mu
+                    // TESTING_MALLOC_PIN(h_mu, T, ldc * Cn * batchCount);
+                }
 
                 for (int g = 0; g < ngpu; g++)
                 {
@@ -283,6 +269,22 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                     TESTING_MALLOC_CPU(dot_result_h[g], T, batchCount_gpu);
                     TESTING_MALLOC_CPU(logdet_result_h[g], T, batchCount_gpu);
 
+                    if (opts.vecchia)
+                    {
+                        // used for vecchia offset
+                        TESTING_MALLOC_DEV(d_A_copy[g], T, lddacon * Acon * batchCount_gpu);
+                        TESTING_MALLOC_DEV(d_A_conditioned[g], T, lddacon * An * batchCount_gpu);
+                        TESTING_MALLOC_DEV(d_C_conditioned[g], T, lddccon * Cn * batchCount_gpu);
+                        // store the offset
+                        TESTING_MALLOC_DEV(d_mu_offset[g], T, lddc * Cn * batchCount_gpu);
+                        TESTING_MALLOC_DEV(d_A_offset[g], T, ldda * An * batchCount_gpu);
+                        // extra memory for mu, in order to deal with the boundary value
+                        TESTING_MALLOC_DEV(d_C_copy[g], T, lddc * Cn * batchCount_gpu);
+                        // TESTING_MALLOC_DEV(d_mu[g], T, lddc * Cn * batchCount_gpu);
+                        // TESTING_MALLOC_DEV(d_mu_copy[g], T, lddc * Cn * batchCount_gpu);
+                    }
+
+                    /* TODO
                     if (!strided)
                     {
                         TESTING_MALLOC_DEV(d_A_array[g], T *, batchCount_gpu);
@@ -295,8 +297,10 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                         TESTING_MALLOC_DEV(d_ldda[g], int, batchCount_gpu);
                         TESTING_MALLOC_DEV(d_lddc[g], int, batchCount_gpu);
                     }
+                    */
                 }
 
+                /* TODO
                 if (opts.check || opts.time)
                 {
                     TESTING_MALLOC_CPU(h_R, T, ldc * Cn * batchCount);
@@ -312,22 +316,99 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                         nruns = 1;
                     }
                 }
+                */
                 // Xrand_matrix(Am, An * batchCount, h_A, lda);
                 /*
-                matrix generation using kernel
+                maftrix generation using kernel
                 */
-                // uniform random generation for locations / read locations from disk
+                // Uniform random generation for locations / read locations from disk
                 TESTING_MALLOC_CPU(localtheta, T, 3); // no nugget effect
                 localtheta[0] = opts.sigma;
                 localtheta[1] = opts.beta;
                 localtheta[2] = opts.nu;
-                for (int i = 0; i < batchCount; i++)
-                {
-                    locations = GenerateXYLoc(Am, seed[i]);
-                    core_dcmg(h_A + i * An * lda, Am, An, locations, locations, localtheta, 0);
-                    printLocations(M, locations);
-                    printMatrixCPU(M, M, h_A+ i * An * lda, lda, i);
+
+                locations = GenerateXYLoc(batchCount * lda, 1);
+                // printLocations(batchCount * lda, locations);
+                if (opts.vecchia){
+                    // Allocate memory for the copy, double is for locations not for computations
+                    // locations_con->x = (double*) malloc(batchCount * lda * sizeof(double));
+                    // locations_con->y = (double*) malloc(batchCount * lda * sizeof(double));
+                    // locations_con->z = NULL;
+
+                    
+                    for (int i=0; i < batchCount; i ++){
+                        locations_con[i] = (location*) malloc(sizeof(location));
+                        locations_con[i]->x=&(locations->x[lda * i]);
+                        locations_con[i]->y=&(locations->y[lda * i]); // 
+                        locations_con[i]->z = NULL;
+                    }                    
+
+
+                    // printf("locations_con->x[1] is %lf\n", locations_con->x[1]);
+                    // Copy the values from the original struct to the copy
+                    // for (int i = 0; i < batchCount * lda; i++) {
+                    //     locations_con->x[i] = locations->x[i];
+                    //     locations_con->y[i] = locations->y[i];
+                    // }
+                    // printf("locations_con->x[1] is %lf\n", locations_con->x[1]);
                 }
+                // printLocations(batchCount * lda, locations_con);
+                printf("[info] Starting Covariance Generation. \n");
+                struct timespec start_dcmg, end_dcmg;
+                clock_gettime(CLOCK_MONOTONIC, &start_dcmg);
+                for (int i = 0; i < batchCount; i++)
+                {   
+                    core_dcmg(h_A + i * An * lda,
+                              lda, An,
+                              locations,
+                              locations, localtheta, 0);
+                    // printf("x is %lf \n",locations->x[0]);
+                    // printf("y is %lf \n",locations->y[0]);
+                    // printf("The conditioning covariance matrix.\n");
+                    // printMatrixCPU(M, M, h_A + i * An * lda, lda, i); 
+
+                    if (opts.vecchia)
+                    {
+                        // used for vecchia offset, the first one would not be used for offset
+                        if(i==0)
+                        {      
+                            // this is used for the boundary, which no any meaning for llh
+                            locations_con_boundary = GenerateXYLoc(lda, 1);
+                            core_dcmg(h_A_conditioned, ldacon, An,
+                                                        locations_con_boundary,
+                                                        locations, localtheta, 0);
+                        }    
+                        else
+                        {   
+                            locations_con[i-1]->x += (Am - Acon);
+                            locations_con[i-1]->y += (Am - Acon);
+                            // printf("x is %lf \n",locations_con->x[0]);
+                            // printf("y is %lf \n",locations_con->y[0]);
+                            // printf("x is %lf \n",locations->x[0]);
+                            // printf("y is %lf \n",locations->y[0]);
+                            core_dcmg(h_A_conditioned + i * An * ldacon,
+                                    ldacon, An,
+                                    locations_con[i-1],
+                                    locations, localtheta, 0); //matrix size: lda by An
+                            // printf("The conditioned covariance matrix.\n");
+                            // printMatrixCPU(M, M, h_A_conditioned + i * An * lda, lda, i);
+                            // locations_con->x += Acon;
+                            // locations_con->y += Acon;
+                        }
+                    }
+
+                    // obeservation initialization
+                    for (int j = 0; j < Cm; j++)
+                    {
+                        h_C[j + i * Cm] = 1;
+                        // h_mu[j + i * Cm] = 0;
+                    }
+                    locations->x += An;
+                    locations->y += An;
+                }
+                clock_gettime(CLOCK_MONOTONIC, &end_dcmg);
+                dcmg_time = end_dcmg.tv_sec - start_dcmg.tv_sec + (end_dcmg.tv_nsec - start_dcmg.tv_nsec) / 1e9;
+                printf("[info] Finished Covariance Generation with time %lf seconds. \n", dcmg_time);
                 /*
                 Xrand_matrix(Am, An * batchCount, h_A, lda);
                 for (int i = 0; i < batchCount; i++)
@@ -336,11 +417,6 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                     // printMatrixCPU(M, M, h_A, lda, i);
                 }
                 */
-
-                for (int i = 0; i < batchCount * Cm; i++)
-                {
-                    h_C[i] = 1;
-                }
                 // Xrand_matrix(Cm, Cn * batchCount, h_C, ldc);
                 // printMatrixCPU(M, M, h_A, lda, i);
                 // if (opts.time)
@@ -355,6 +431,10 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                     check_cublas_error(cublasSetMatrixAsync(Cm, Cn * batchCount_gpu, sizeof(T),
                                                             h_C + Cm * Cn * batchCount_gpu * g, ldc,
                                                             d_C[g], lddc, kblasGetStream(kblas_handle[g])));
+                    // check_cublas_error(cublasSetMatrixAsync(Cm, Cn * batchCount_gpu, sizeof(T),
+                    //                                         h_mu + Cm * Cn * batchCount_gpu * g, ldc,
+                    //                                         d_mu[g], lddc, kblasGetStream(kblas_handle[g])));
+                    /* TODO
                     if (!strided)
                     {
                         check_kblas_error(Xset_pointer_2(d_A_array[g], d_A[g], ldda, An * ldda,
@@ -372,38 +452,125 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                         check_kblas_error(iset_value_1(d_ldda[g], ldda, batchCount, kblasGetStream(kblas_handle[g])));
                         check_kblas_error(iset_value_1(d_lddc[g], lddc, batchCount, kblasGetStream(kblas_handle[g])));
                     }
+                    */
                 }
 
-                // 
-                for (int g = 0; g < ngpu; g++)
-                {
-                    if (nonUniform)
-                        kblas_trsm_batch_nonuniform_wsquery(kblas_handle[g]);
-                    else if (strided)
-                    {
-                        kblas_potrf_batch_strided_wsquery(kblas_handle[g], M, batchCount_gpu);
-                        kblas_trsm_batch_strided_wsquery(kblas_handle[g], opts.side, M, N, batchCount_gpu);
+                if (opts.vecchia)
+                {   
+                    printf("====================== The vecchia offset is starting now! ====================== \n");
+                    // /* conditioned part, \sigma_{12} inv (\sigma_{22}) \sigma_{21} and \mu
+                    // this part is removable in the real data 
+                    for (int i = 0; i < batchCount; i++)
+                    {   
+                        // pair with conditioned covariance matrix
+                        if (i==0){
+                            // this does not matter, just some random number to make the matrix postive definite
+                            core_dcmg(h_A_copy, Acon, Acon,
+                                                        locations_con_boundary,
+                                                        locations_con_boundary, 
+                                                        localtheta, 0); 
+                            memcpy(h_C_conditioned, h_C, sizeof(T) * ldccon * Cn);
+                        }
+                        else{
+                            // varied conditioned number
+                            for (int j = 0; j < Acon; j++)
+                            {
+                                memcpy(h_A_copy + Acon * j + i * Acon * Acon,
+                                    h_A  + lda * An * (i -1) + (An - Acon + j) * An + (An - Acon), //  = i * An * An,
+                                    sizeof(T) * Acon);                                       // the last one will not be used to offset
+                            }
+                            memcpy(h_C_conditioned + ldccon * Cn * i, 
+                                    h_C + ldc * Cn * (i - 1) + (ldc - ldccon), 
+                                    sizeof(T) * ldccon * Cn);
+                        }
+                        // printf("h_A_copy: \n");
+                        // printMatrixCPU(Acon, Acon, h_A_copy + i * Acon * Acon, ldacon, i);
                     }
-                    else
+                    // extra memory for mu
+                    // check_cublas_error(cublasSetMatrixAsync(Cm, Cn * batchCount_gpu, sizeof(T),
+                    //                                         h_mu + Cm * Cn * batchCount_gpu * g, ldc,
+                    //                                         d_mu_copy[g], lddc, kblasGetStream(kblas_handle[g])));
+                    // conditioned part 1.1, matrix copy from host to device
+                    for (int g = 0; g < ngpu; g++)
                     {
-                        kblas_potrf_batch_wsquery(kblas_handle[g], M, batchCount_gpu);
-                        kblas_trsm_batch_wsquery(kblas_handle[g], opts.side, M, N, batchCount_gpu);
+                        check_error(cudaSetDevice(opts.devices[g]));
+                        check_cublas_error(cublasSetMatrixAsync(Acon, Acon * batchCount_gpu, sizeof(T),
+                                                                h_A_copy + Acon * Acon * batchCount_gpu * g, ldacon,
+                                                                d_A_copy[g], lddacon, kblasGetStream(kblas_handle[g])));
+                        check_cublas_error(cublasSetMatrixAsync(Acon, An * batchCount_gpu, sizeof(T),
+                                                                h_A_conditioned + Acon * An * batchCount_gpu * g, ldacon,
+                                                                d_A_conditioned[g], lddacon, kblasGetStream(kblas_handle[g])));
+                        check_cublas_error(cublasSetMatrixAsync(Ccon, Cn * batchCount_gpu, sizeof(T),
+                                                                h_C_conditioned + Ccon * Cn * batchCount_gpu * g, ldccon,
+                                                                d_C_conditioned[g], lddccon, kblasGetStream(kblas_handle[g])));
+                        // check the device for offset, needed?  TODO test
+                        // check_cublas_error(cublasSetMatrixAsync(Cm, Cn * batchCount_gpu, sizeof(T),
+                        //                                         h_C_conditioned + Cm * Cn * batchCount_gpu * g, ldc,
+                        //                                         d_mu_offset[g], lddc, kblasGetStream(kblas_handle[g])));
+                        check_cublas_error(cublasSetMatrixAsync(Am, An * batchCount_gpu, sizeof(T),
+                                                                h_A_copy + Am * An * batchCount_gpu * g, lda,
+                                                                d_A_offset[g], ldda, kblasGetStream(kblas_handle[g])));
+                        check_cublas_error(cublasSetMatrixAsync(Cm, Cn * batchCount_gpu, sizeof(T),
+                                                                h_C + Cm * Cn * batchCount_gpu * g, ldc,
+                                                                d_C_copy[g], lddc, kblasGetStream(kblas_handle[g])));
+                        /*
+                        TODO
+                        if (!strided)
+                        {
+                            check_kblas_error(Xset_pointer_2(d_A_array[g], d_A[g], ldda, An * ldda,
+                                                             d_C_array[g], d_C[g], lddc, Cn * lddc,
+                                                             batchCount_gpu, kblasGetStream(kblas_handle[g])));
+                        }
+                        if (nonUniform)
+                        {
+                            check_cublas_error(cublasSetVectorAsync(batchCount_gpu, sizeof(int),
+                                                                    h_M + batchCount_gpu * g, 1,
+                                                                    d_M[g], 1, kblasGetStream(kblas_handle[g])));
+                            check_cublas_error(cublasSetVectorAsync(batchCount, sizeof(int),
+                                                                    h_N + batchCount_gpu * g, 1,
+                                                                    d_N[g], 1, kblasGetStream(kblas_handle[g])));
+                            check_kblas_error(iset_value_1(d_ldda[g], ldda, batchCount, kblasGetStream(kblas_handle[g])));
+                            check_kblas_error(iset_value_1(d_lddc[g], lddc, batchCount, kblasGetStream(kblas_handle[g])));
+                        }
+                        */
                     }
-                    check_kblas_error(kblasAllocateWorkspace(kblas_handle[g]));
-                    check_error(cudaGetLastError());
-                }
 
-                double time = 0;
+                    // conditioned part 1.2, wsquery for potrf and trsm
+                    for (int g = 0; g < ngpu; g++)
+                    {
+                        if (strided)
+                        {
+                            kblas_potrf_batch_strided_wsquery(kblas_handle[g], Acon, batchCount_gpu);
+                            kblas_trsm_batch_strided_wsquery(kblas_handle[g], opts.side, Acon, N, batchCount_gpu);
+                            kblas_gemm_batch_strided_wsquery(kblas_handle[g], batchCount);
+                        }
+                        else
+                        {
+                            return 0;
+                        }
+                        /* TODO
+                        else if (nonUniform)
+                            kblas_trsm_batch_nonuniform_wsquery(kblas_handle[g]);
+                        else
+                        {
+                            kblas_potrf_batch_wsquery(kblas_handle[g], M, batchCount_gpu);
+                            kblas_trsm_batch_wsquery(kblas_handle[g], opts.side, M, N, batchCount_gpu);
+                        }
+                        */
+                        check_kblas_error(kblasAllocateWorkspace(kblas_handle[g]));
+                        check_error(cudaGetLastError());
+                    }
 
-                for (int r = 0; r < nruns; r++)
-                {
+                    // conditioned part 2, for batched operationed
                     for (int g = 0; g < ngpu; g++)
                     {
                         check_error(cudaSetDevice(opts.devices[g]));
                         cudaDeviceSynchronize(); // TODO sync with streams instead
                     }
-                    // start_timing(curStream);
-                    time = -gettime();
+
+                    struct timespec start, end;
+                    clock_gettime(CLOCK_MONOTONIC, &start);
+
                     for (int g = 0; g < ngpu; g++)
                     {
                         check_error(cudaSetDevice(opts.devices[g]));
@@ -413,17 +580,18 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                         // for (int i = 0; i < batchCount_gpu; i++)
                         // {
                         //     printf("%dth", i);
-                        //     printMatrixGPU(Am, An, d_A[g] + i * Am * ldda, ldda);
-                        // }
+                        //     printMatrixGPU(Am, An, d_A_copy[g] + i * Am * ldda, ldda);
+                        // } 
                         printf("[info] Starting Cholesky decomposition. \n");
                         if (strided)
                         {
                             check_kblas_error(kblas_potrf_batch(kblas_handle[g],
                                                                 opts.uplo, Am,
-                                                                d_A[g], ldda, An * ldda,
+                                                                d_A_copy[g], lddacon, Acon * lddacon,
                                                                 batchCount_gpu,
                                                                 d_info[g]));
                         }
+                        /* TODO
                         else
                         {
                             check_kblas_error(kblas_potrf_batch(kblas_handle[g],
@@ -432,6 +600,7 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                                                                 batchCount_gpu,
                                                                 d_info[g]));
                         }
+                        */
                         // for (int i = 0; i < batchCount_gpu; i++)
                         // {
                         //     printf("%dth", i);
@@ -439,39 +608,39 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                         // }
                         printf("[info] Finished Cholesky decomposition. \n");
                         /*
-                        determinant
+                        triangular solution: L \Sigma_offset <- \Sigma_old && L z_offset <- z_old
                         */
-                        if (strided)
-                        {
-                            for (int i = 0; i < batchCount_gpu; i++)
-                            {
-                                core_Xlogdet<T>(d_A[g] + i * An * ldda, An, ldda, &(logdet_result_h[g][i]));
-                                // cudaDeviceSynchronize(); 
-                            }
-                            // printf("the det value is %lf \n", logdet_result_h[g][0]);
-                        }
-                        else
-                        {
-                            // for (int i = 0; i < batchCount_gpu; i++)
-                            // {
-                            //     core_Xdet<T>(d_A_array[g] + i * An * lda, An, lda, &(logdet_result_h[g][i]));
-                            // }
-                            return 0;
-                        }
-                        printf("[info] Finished determinant. \n");
-                        /*
-                        triangular solution: L^T Z_new <- Z_old
-                        */
+                        printf("[info] Starting triangular solver. \n");
+                        // for (int i = 0; i < batchCount_gpu; i++)
+                        // {
+                        //     printf("%dth", i);
+                        //     printMatrixGPU(Am, An, d_A_copy[g] + i * Am * ldda, ldda);
+                        //     printMatrixGPU(Am, An, d_A_conditioned[g] + i * Am * ldda, ldda);
+                        // }
+
                         if (strided)
                         {
                             check_kblas_error(kblasXtrsm_batch_strided(kblas_handle[g],
-                                                                       opts.side, opts.uplo, opts.transA, opts.diag,
-                                                                       An, Cn,
+                                                                       opts.side, opts.uplo, KBLAS_NoTrans, opts.diag,
+                                                                       lddacon, An,
                                                                        alpha,
-                                                                       d_A[g], ldda, An * ldda,
-                                                                       d_C[g], lddc, Cn * lddc,
+                                                                       d_A_copy[g], lddacon, Acon * lddacon, // A <- L
+                                                                       d_A_conditioned[g], lddacon, An * lddacon,
+                                                                       batchCount_gpu)); //d_A_conditioned <- 
+                            check_kblas_error(kblasXtrsm_batch_strided(kblas_handle[g],
+                                                                       opts.side, opts.uplo, KBLAS_NoTrans, opts.diag,
+                                                                       lddccon, Cn,
+                                                                       alpha,
+                                                                       d_A_copy[g], lddacon, Acon * lddacon, // A <- L
+                                                                       d_C_conditioned[g], lddccon, Cn * lddccon,
                                                                        batchCount_gpu));
                         }
+                        // for (int i = 0; i < batchCount_gpu; i++)
+                        // {
+                        //     printf("%dth", i);
+                        //     printMatrixGPU(Am, An, d_A_conditioned[g] + i * Am * ldda, ldda);
+                        // }
+                        /*TODO
                         else
                         {
                             check_cublas_error(
@@ -489,52 +658,335 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                             //                                    d_C_array[g], lddc,
                             //                                    batchCount_gpu));
                         }
-                        printf("[info] Finished triangular solver. \n");
-                        // printVecGPU(Cm, Cn, d_C[0], ldda);
-                        /*
-                        Dot scalar Z_new^T Z_new
                         */
-                        if (nonUniform)
+                        // printVecGPU(Cm, Cn, d_C[0], ldda);
+                        printf("[info] Finished triangular solver. \n");
+                        /*
+                        GEMM and GEMV: \Sigma_offset^T %*% \Sigma_offset and \Sigma_offset^T %*% z_offset
+                        */
+                        printf("[info] Starting GEMM and GEMV. \n");
+                        if (strided)
                         {
-                            return 0;
-                        }
-                        else if (strided)
-                        {
-                            for (int i = 0; i < batchCount_gpu; i++)
-                            {
-                                check_cublas_error(cublasXdot(kblasGetCublasHandle(kblas_handle[g]), Cm,
-                                                              d_C[g] + i * Cn * lddc, 1,
-                                                              d_C[g] + i * Cn * lddc, 1,
-                                                              &(dot_result_h[g][i])));
-                            }
-                            // printf("Dot product is %lf \n", dot_result_h[g][0]);
-                            // cublasDnrm2( kblasGetCublasHandle(kblas_handle[g]), Cm, d_C[g], 1,  dot_result_h[g]);
-                        }
-                        else
-                        {
+                            // \Sigma_offset^T %*% \Sigma_offset
                             // for (int i = 0; i < batchCount_gpu; i++)
                             // {
-                            //     check_cublas_error(cublasXdot(kblasGetCublasHandle(kblas_handle[g]), Cm,
-                            //                                   d_C_array[g] + i * Cn * ldc, 1,
-                            //                                   d_C_array[g] + i * Cn * ldc, 1,
-                            //                                   &(dot_result_h[g][i])));
+                            //     printf("%dth", i);
+                            //     printMatrixGPU(Am, An, d_A_conditioned[g] + i * Acon * lddacon, lddacon);
                             // }
-                            return 0;
+                            check_kblas_error(kblas_gemm_batch(kblas_handle[g],
+                                                               KBLAS_Trans, KBLAS_NoTrans,
+                                                               Am, An, Acon,
+                                                               alpha,
+                                                               d_A_conditioned[g], lddacon, An * lddacon,
+                                                               d_A_conditioned[g], lddacon, An * lddacon,
+                                                               0,
+                                                               d_A_offset[g], ldda, An * ldda,
+                                                               batchCount_gpu));
+                            // for (int i = 0; i < batchCount_gpu; i++)
+                            // {
+                            //     printf("%dth", i);
+                            //     printMatrixGPU(Am, An, d_A_offset[g] + i * An * ldda, ldda);
+                            // } 
+                            // \Sigma_offset^T %*% z_offset
+                            check_kblas_error(kblas_gemm_batch(kblas_handle[g],
+                                                               KBLAS_Trans, KBLAS_NoTrans,
+                                                               Am, Cn, Acon,
+                                                               alpha,
+                                                               d_A_conditioned[g], lddacon, An * lddacon,
+                                                               d_C_conditioned[g], lddccon, Cn * lddccon,
+                                                               0,
+                                                               d_mu_offset[g], lddc, Cn * lddc,
+                                                               batchCount_gpu));
+                            // for (int i = 0; i < batchCount_gpu; i++)
+                            // {
+                            //     printf("%dth", i);
+                            //     printVecGPU(Cm, Cn, d_mu_offset[g] + i * lddc * Cn, lddc, i);
+                            // } 
                         }
-                        printf("[info] Finished dot product. \n");
+                        /*TODO non-strided*/
+                        printf("[info] Finished GEMM and GEMV. \n");
+
+                        /*
+                        GEAD: \Sigma_new <- \Sigma - \Sigma_offset && \mu_new <- \mu - \mu_offset (not necessary)
+                        */
+                        printf("[info] Starting GEAD. \n");
+                        // for (int i = 0; i < batchCount_gpu; i++)
+                        // {
+                        //     printf("%dth", i);
+                        //     printMatrixGPU(Am, An, d_A_copy[g] + i * Am * ldda, ldda);
+                        // }
+                        // for (int i = 0; i < batchCount_gpu; i++)
+                        // {
+                        //     printf("%dth", i);
+                        //     printMatrixGPU(Am, An, d_A_offset[g] + i * Am * ldda, ldda);
+                        // }
+                        if (strided)
+                        {
+                            for (int i = 1; i < batchCount_gpu; i++)
+                            {
+                                check_cublas_error(cublasXgeam(kblasGetCublasHandle(kblas_handle[g]),
+                                                               CUBLAS_OP_N, CUBLAS_OP_N,
+                                                               Am, An,
+                                                               &alpha_offset_1, // 1
+                                                               d_A[g] + ldda * An * i, ldda, // !!!!!not sure if it's ok, in order to save memory !!!!
+                                                               &beta_offset_n1, // -1
+                                                               d_A_offset[g] + ldda * An * i, ldda,
+                                                               d_A[g] + ldda * An * i, ldda)); // + ldda * An * i means the first one does not change
+                                // check_cublas_error(cublasXgeam(kblasGetCublasHandle(kblas_handle[g]),
+                                //                                CUBLAS_OP_N, CUBLAS_OP_N,
+                                //                                Cm, Cn,
+                                //                                alpha_offset_mu,
+                                //                                d_mu_copy[g] + lddc * Cn * i, ldda, ldda,
+                                //                                beta_offset_mu,
+                                //                                d_mu_offset[g], lddc, Cn * lddc,
+                                //                                d_mu[g] + lddc * Cn * i, lddc));
+                            }
+                        }
+                        // for (int i = 0; i < batchCount_gpu; i++)
+                        // {
+                        //     printf("%dth", i);
+                        //     printMatrixGPU(Am, An, d_A[g] + i * Am * ldda, ldda);
+                        // }
+                        /*TODO non-strided*/
+                        printf("[info] Finished GEAD. \n");
                     }
+
                     for (int g = 0; g < ngpu; g++)
                     {
                         check_error(cudaSetDevice(opts.devices[g]));
                         cudaDeviceSynchronize(); // TODO sync with streams instead
                     }
-                    // time = get_elapsed_time(curStream);
-                    time += gettime();
-                    kblas_time_1 += time;
+                    clock_gettime(CLOCK_MONOTONIC, &end);
+                    vecchia_time = end.tv_sec - start.tv_sec + (end.tv_nsec - start.tv_nsec) / 1e9;
+
+                    cudaFreeHost(h_A_copy);
+                    cudaFreeHost(h_A_conditioned);
+                    cudaFreeHost(h_C_conditioned);
+                    for (int g = 0; g < ngpu; g++)
+                    {
+                        check_error(cudaSetDevice(opts.devices[g]));
+                        check_error(cudaFree(d_A_copy[g]));
+                        check_error(cudaFree(d_A_conditioned[g]));
+                        check_error(cudaFree(d_C_conditioned[g]));
+                        check_error(cudaFree(d_A_offset[g]));
+                    }
+
+                    // */conditioned part, \sigma_{12} inv (\sigma_{22}) \sigma_{21}
+                    printf("====================== The vecchia offset is finished! ====================== \n");
+                    printf("[Info] The time for vecchia offset is %lf seconds \n", vecchia_time);
                 }
-                kblas_time_1 /= nruns;
-                kblas_perf = gflops / kblas_time_1;
-                kblas_time_1 *= 1000.0;
+
+                printf("====================== Independent computing is starting now! ====================== \n");
+
+                /*
+                Independent computing
+                */
+                for (int g = 0; g < ngpu; g++)
+                {
+                    if (strided)
+                    {
+                        kblas_potrf_batch_strided_wsquery(kblas_handle[g], M, batchCount_gpu);
+                        kblas_trsm_batch_strided_wsquery(kblas_handle[g], opts.side, M, N, batchCount_gpu);
+                    }
+                    /* TODO
+                    else if (nonUniform)
+                        kblas_trsm_batch_nonuniform_wsquery(kblas_handle[g]);
+                    else
+                    {
+                        kblas_potrf_batch_wsquery(kblas_handle[g], M, batchCount_gpu);
+                        kblas_trsm_batch_wsquery(kblas_handle[g], opts.side, M, N, batchCount_gpu);
+                    }
+                    */
+                    check_kblas_error(kblasAllocateWorkspace(kblas_handle[g]));
+                    check_error(cudaGetLastError());
+                }
+
+                struct timespec start, end;
+                clock_gettime(CLOCK_MONOTONIC, &start);
+                
+                for (int g = 0; g < ngpu; g++)
+                {
+                    check_error(cudaSetDevice(opts.devices[g]));
+                    cudaDeviceSynchronize(); // TODO sync with streams instead
+                }
+                for (int g = 0; g < ngpu; g++)
+                {
+                    check_error(cudaSetDevice(opts.devices[g]));
+                    /*
+                    cholesky decomposition
+                    */
+                    // printf("[info] Starting Cholesky decomposition. \n");
+                    // for (int i = 0; i < batchCount_gpu; i++)
+                    // {
+                    //     printf("%dth", i);
+                    //     printMatrixGPU(Am, An, d_A[g] + i * Am * ldda, ldda);
+                    // }
+                    if (strided)
+                    {
+                        check_kblas_error(kblas_potrf_batch(kblas_handle[g],
+                                                            opts.uplo, Am,
+                                                            d_A[g], ldda, An * ldda,
+                                                            batchCount_gpu,
+                                                            d_info[g]));
+                    }
+                    /*TODO
+                    else
+                    {
+                        check_kblas_error(kblas_potrf_batch(kblas_handle[g],
+                                                            opts.uplo, Am,
+                                                            d_A_array[g], ldda,
+                                                            batchCount_gpu,
+                                                            d_info[g]));
+                    }*/
+                    // for (int i = 0; i < batchCount_gpu; i++)
+                    // {
+                    //     printf("%dth", i);
+                    //     printMatrixGPU(Am, An, d_A[g] + i * Am * ldda, ldda);
+                    // }
+                    printf("[info] Finished Cholesky decomposition. \n");
+                    /*
+                    determinant
+                    */
+                    if (strided)
+                    {
+                        for (int i = 0; i < batchCount_gpu; i++)
+                        {
+                            core_Xlogdet<T>(d_A[g] + i * An * ldda, An, ldda, &(logdet_result_h[g][i]));
+                            // printf("the det value is %lf \n", logdet_result_h[g][i]);
+                            // cudaDeviceSynchronize();
+                        }
+                        // printf("The results during log-det.");
+                        // printMatrixGPU(M, M, d_A[0] + An * ldda, ldda);
+                    }
+                    /* TODO
+                    else
+                    {
+                        // for (int i = 0; i < batchCount_gpu; i++)
+                        // {
+                        //     core_Xdet<T>(d_A_array[g] + i * An * lda, An, lda, &(logdet_result_h[g][i]));
+                        // }
+                        return 0;
+                    }
+                    */
+                    printf("[info] Finished determinant. \n");
+                    /*
+                    triangular solution: L Z_new <- Z_old
+                    */
+                    printf("[info] Starting triangular solver. \n");
+                    if (opts.vecchia)
+                    {
+                        for (int i = 1; i < batchCount_gpu; i++)
+                        {
+                            // printf("The results before TRSM \n");
+                            // printVecGPU(Cm, Cn, d_C[g], ldc, i);
+                            // printf("The results before TRSM \n");
+                            // printVecGPU(Cm, Cn, d_C_copy[g]+ lddc * Cn * i, ldc, i);
+                            // printf("The results before TRSM \n");
+                            // printVecGPU(Cm, Cn, d_mu_offset[g]+ lddc * Cn * i, ldc, i);
+                            check_cublas_error(cublasXgeam(kblasGetCublasHandle(kblas_handle[g]),
+                                                           CUBLAS_OP_N, CUBLAS_OP_N,
+                                                           Cm, Cn,
+                                                           &alpha_offset_1, // 1
+                                                           d_C_copy[g] + lddc * Cn * i, lddc,
+                                                           &beta_offset_n1, // -1
+                                                           d_mu_offset[g] + lddc * Cn * i, lddc,
+                                                           d_C[g] + lddc * Cn * i, lddc));
+                            // printf("The results before TRSM \n");
+                            // printVecGPU(Cm, Cn, d_C[g] + i * Cn * lddc, ldc, i);
+                        }
+                        check_error(cudaFree(d_mu_offset[g]));
+                        // printf("The results before TRSM \n");
+                        // printVecGPU(Cm, Cn, d_C[g] + Cn * lddc, ldc, 1);
+                        // printf("The results before TRSM \n");
+                        // printVecGPU(Cm, Cn, d_C[g], ldc, 0);
+                    }
+                    // printf("The results before TRSM.");
+                    // printMatrixGPU(M, M, d_A[0] + An * ldda, ldda);
+                    // for(int i=0; i<batchCount_gpu; i++){
+                    //     printVecGPU(Cm, Cn, d_C[g] + i * Cn * lddc, ldc, i);
+                    // }
+                    // for (int i = 0; i < batchCount_gpu; i++)
+                    // {
+                    //     printf("%dth", i);
+                    //     printMatrixGPU(Am, An, d_A[g] + i * Am * ldda, ldda);
+                    // }
+                    if (strided)
+                    {
+                        check_kblas_error(kblasXtrsm_batch_strided(kblas_handle[g],
+                                                                   opts.side, opts.uplo, opts.transA, opts.diag,
+                                                                   An, Cn,
+                                                                   alpha,
+                                                                   d_A[g], ldda, An * ldda,
+                                                                   d_C[g], lddc, Cn * lddc,
+                                                                   batchCount_gpu));
+                    }
+                    // for(int i=0; i<batchCount_gpu; i++){
+                    //     printVecGPU(Cm, Cn, d_C[g] + i * Cn * lddc, ldc, i);
+                    // }
+                    /* TODO
+                    else
+                    {
+                        check_cublas_error(
+                            cublasDtrsmBatched(kblasGetCublasHandle(kblas_handle[g]),
+                                               CUBLAS_SIDE_LEFT, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_T, CUBLAS_DIAG_NON_UNIT,
+                                               An, Cn,
+                                               &alpha,
+                                               d_A_array[g], ldda,
+                                               d_C_array[g], lddc,
+                                               batchCount_gpu));
+                        // check_kblas_error(kblasXtrsm_batch(kblas_handle[g],
+                        //                                    opts.side, opts.uplo, opts.transA, opts.diag,
+                        //                                    M, N,
+                        //                                    alpha, (const T **)(d_A_array[g]), ldda,
+                        //                                    d_C_array[g], lddc,
+                        //                                    batchCount_gpu));
+                    }
+                    */
+                    printf("[info] Finished triangular solver. \n");
+                    /*
+                    Dot scalar Z_new^T Z_new
+                    */
+                    printf("[info] Starting dot product. \n");
+                    if (strided)
+                    {
+                        for (int i = 0; i < batchCount_gpu; i++)
+                        {
+                            // printVecGPU(Cm, Cn, d_C[g] + i * Cn * lddc, ldc, i);
+                            check_cublas_error(cublasXdot(kblasGetCublasHandle(kblas_handle[g]), Cm,
+                                                          d_C[g] + i * Cn * lddc, 1,
+                                                          d_C[g] + i * Cn * lddc, 1,
+                                                          &(dot_result_h[g][i])));
+                            // printf("Dot product is %lf \n", dot_result_h[g][i]);
+                        }
+                        // cublasDnrm2( kblasGetCublasHandle(kblas_handle[g]), Cm, d_C[g], 1,  dot_result_h[g]);
+                    }
+                    /* TODO
+                    else if (nonUniform)
+                    {
+                        return 0;
+                    }
+                    else
+                    {
+                        // for (int i = 0; i < batchCount_gpu; i++)
+                        // {
+                        //     check_cublas_error(cublasXdot(kblasGetCublasHandle(kblas_handle[g]), Cm,
+                        //                                   d_C_array[g] + i * Cn * ldc, 1,
+                        //                                   d_C_array[g] + i * Cn * ldc, 1,
+                        //                                   &(dot_result_h[g][i])));
+                        // }
+                        return 0;
+                    }
+                    */
+                    printf("[info] Finished dot product. \n");
+                }
+                for (int g = 0; g < ngpu; g++)
+                {
+                    check_error(cudaSetDevice(opts.devices[g]));
+                    cudaDeviceSynchronize(); // TODO sync with streams instead
+                }
+                // time = get_elapsed_time(curStream);
+                clock_gettime(CLOCK_MONOTONIC, &end);
+                kblas_time_1 = end.tv_sec - start.tv_sec + (end.tv_nsec - start.tv_nsec) / 1e9;
 
                 cudaFreeHost(h_A);
                 cudaFreeHost(h_C);
@@ -565,19 +1017,6 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                     }
                 }
 
-                if (opts.time)
-                {
-                    ref_sdev_perf = sqrt((ref_sdev_perf - (ref_avg_perf * ref_avg_perf / nruns)) / nruns);
-                    // rec_sdev_perf = sqrt((rec_sdev_perf - (rec_avg_perf * rec_avg_perf / nruns))/nruns);
-                }
-
-                // printf(" %7.4f %7.4f       %7.4f %7.4f %7.4f %7.4f    %7.4f %7.4f %7.4f %7.4f    %.4e \n",
-                // printf(" %7.4f %7.4f %7.4f %7.4f %7.4f       %7.4f %7.4f %7.4f %7.4f    %.4e \n",
-                //        kblas_perf, kblas_time, kblas_time_1,
-                //        cublas_perf, cublas_time,
-                //        ref_avg_perf / nruns, ref_avg_time, ref_sdev_perf, ref_avg_time / kblas_time_1,
-                //        // rec_avg_perf / nruns, rec_avg_time, rec_sdev_perf, rec_avg_time / kblas_time,
-                //        ref_error);
                 printf("-----------------------------------------\n");
 
                 for (int g = 0; g < ngpu; g++)
@@ -587,16 +1026,18 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                         T llk_temp = 0;
                         llk_temp = -(dot_result_h[g][k] + logdet_result_h[g][k] + Am * log(2 * PI)) * 0.5;
                         llk += llk_temp;
-                        printf("%dth log determinant is % lf\n", k, logdet_result_h[g][k]);
-                        printf("%dth dot product is % lf\n", k, dot_result_h[g][k]);
-                        printf("%dth pi is % lf\n", k, Am * log(2 * PI));
-                        printf("%dth log likelihood is % lf\n", k, llk_temp);
-                        printf("-------------------------------------\n");
+                        // printf("%dth log determinant is % lf\n", k, logdet_result_h[g][k]);
+                        // printf("%dth dot product is % lf\n", k, dot_result_h[g][k]);
+                        // printf("%dth pi is % lf\n", k, Am * log(2 * PI));
+                        // printf("%dth log likelihood is % lf\n", k, llk_temp);
+                        // printf("-------------------------------------\n");
                     }
                 }
                 printf("(True) Sigma: %lf beta:  %lf  nu: %lf\n", opts.sigma, opts.beta, opts.nu);
                 printf("Log likelihood is %lf \n", llk);
-                printf("-----------------------------------------\n");
+                printf("====================== Independent computing is finished! ====================== \n");
+                printf("[Info] The time for independent computing is %lf seconds\n", kblas_time_1);
+                printf("[Info] The time for LLH is %lf seconds\n", kblas_time_1 + vecchia_time);
                 for (int g; g < ngpu; g++)
                 {
                     free(dot_result_h[g]);

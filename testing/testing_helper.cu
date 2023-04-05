@@ -873,6 +873,11 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
   opts->beta     = 0.07;
   opts->nu     = 1.;
 
+  // vecchia conditioned
+  opts->vecchia =0; 
+  opts->vecchia_num =0; 
+  opts->test =0;
+
   if(argc < 2){
     USAGE
     exit(0);
@@ -1221,6 +1226,21 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
 
     else if ( strcmp("-DN", argv[i]) == 0 ) { opts->diag  = KBLAS_NonUnit; }
     else if ( strcmp("-DU", argv[i]) == 0 ) { opts->diag  = KBLAS_Unit;    }
+
+    // used for vecchia conditioned
+    else if ( strcmp("--test", argv[i]) == 0 ) { opts->test  = 1;    }
+    else if ( strcmp("--vecchia", argv[i]) == 0 ) { opts->vecchia  = 1;    }
+    else if ( (strcmp("--vecchia_num",   argv[i]) == 0) && i+1 < argc ) {
+      i++;
+      int num;
+      info = sscanf( argv[i], "%d", &num);
+      if( info == 1 ){
+        opts->vecchia_num = num;
+      }else{
+        fprintf( stderr, "error: --vecchia_num %s is invalid; ensure only one number and 0 <= vecchia_num <= M.\n", argv[i]);
+        exit(1);
+      }
+    }
 
     // ----- usage
     else if ( strcmp("-h",     argv[i]) == 0 || strcmp("--help", argv[i]) == 0 ) {

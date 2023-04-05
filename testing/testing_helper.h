@@ -238,6 +238,11 @@ typedef struct kblas_opts
   double sigma;
   double beta;
   double nu;
+
+  // vecchia
+  int vecchia;
+  int vecchia_num;
+  int test;
 } kblas_opts;
 
 int parse_opts(int argc, char** argv, kblas_opts *opts);
