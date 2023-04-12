@@ -47,7 +47,7 @@ location *GenerateXYLoc(int n, int seed)
     //initalization
     int i = 0, index = 0, j = 0;
     srand(seed);
-    location *locations = (location *) malloc(sizeof(location *));
+    location *locations = (location *) malloc(sizeof(location));
     //Allocate memory
     locations->x = (double* ) malloc(n * sizeof(double));
     locations->y = (double* ) malloc(n * sizeof(double));
@@ -1013,7 +1013,7 @@ void core_dcmg_matern_ddnu_nu(double* A, int m, int n,
 void core_dcmg(double* A, int m, int n,
 		// int m0, int n0, 
 		location* l1,
-		location* l2, double* localtheta, int distance_metric) {
+		location* l2, const double* localtheta, int distance_metric) {
 
 	int i, j;
 	// int i0 = m0;
@@ -1028,7 +1028,6 @@ void core_dcmg(double* A, int m, int n,
 	con = pow(2, (localtheta[2] - 1)) * tgamma(localtheta[2]);
 	con = 1.0 / con;
 	con = sigma_square * con;
-
 	for (i = 0; i < m; i++) {
 		j0 = 0;
 		for (j = 0; j < n; j++) {
@@ -1230,12 +1229,12 @@ void core_scmg(float *A, int m, int n,
 	float expr = 0.0;
 	float con = 0.0;
 	float sigma_square = localtheta[0];
+	gsl_error_handler_t *old_error_handler=gsl_set_error_handler_off (); // turn off the error handler
+
 
 	con = pow(2, (localtheta[2] - 1)) * tgamma(localtheta[2]);
 	con = 1.0 / con;
 	con = sigma_square * con;
-
-
 	for (i = 0; i < m; i++) {
 		j0 = n0;
 		for (j = 0; j < n; j++) {
@@ -1249,6 +1248,7 @@ void core_scmg(float *A, int m, int n,
 		}
 		i0++;
 	}
+	gsl_set_error_handler(old_error_handler); //reset the error handler 
 }
 
 /*****************************************************************************

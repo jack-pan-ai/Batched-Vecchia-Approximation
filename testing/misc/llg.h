@@ -209,3 +209,4 @@ void printVecGPU(int Cm, int Cn, T *d_C, int lda, int i)
   printf("\n-------------------------------\n");
   free(h_C);
 }
+

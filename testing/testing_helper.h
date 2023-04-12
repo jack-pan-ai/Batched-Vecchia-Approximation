@@ -243,6 +243,13 @@ typedef struct kblas_opts
   int vecchia;
   int vecchia_num;
   int test;
+
+  // optimization
+  double tol;
+  int maxiter;
+  double lower_bound;
+  double upper_bound;
+  
 } kblas_opts;
 
 int parse_opts(int argc, char** argv, kblas_opts *opts);

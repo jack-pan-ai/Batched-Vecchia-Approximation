@@ -139,7 +139,7 @@ void core_scmg(float *A, int m, int n,
 void core_dcmg(double* A, int m, int n,
             //    int m0, int n0,
                location *l1, location *l2,
-               double* localtheta, int distance_metric);
+               const double* localtheta, int distance_metric);
 
 
 void core_sdcmg(double* A, int m, int n,

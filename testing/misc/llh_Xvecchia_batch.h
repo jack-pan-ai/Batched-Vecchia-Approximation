@@ -1,4 +1,3 @@
-
 template <class T>
 
 T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
@@ -11,7 +10,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
     double alpha_1 = 1.;
     double beta_n1 = -1.;
 
-    printf("[info] Starting Covariance Generation. \n");
+    // printf("[info] Starting Covariance Generation. \n");
     struct timespec start_dcmg, end_dcmg;
     clock_gettime(CLOCK_MONOTONIC, &start_dcmg);
 
@@ -85,18 +84,18 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
         }
 
         // obeservation initialization
-        for (int j = 0; j < data->Cm; j++)
-        {
-            data->h_C[j + i * data->Cm] = 1;
-            // h_mu[j + i * data->Cm] = 0;
-        }
+        // for (int j = 0; j < data->Cm; j++)
+        // {
+        //     data->h_C[j + i * data->Cm] = 1;
+        //     // h_mu[j + i * data->Cm] = 0;
+        // }
         // data->locations_copy->x += data->An;
         // data->locations_copy->y += data->An;
-        cudaFreeHost(loc_batch);
+        free(loc_batch);
     }
     clock_gettime(CLOCK_MONOTONIC, &end_dcmg);
     dcmg_time = end_dcmg.tv_sec - start_dcmg.tv_sec + (end_dcmg.tv_nsec - start_dcmg.tv_nsec) / 1e9;
-    printf("[info] Finished Covariance Generation with time %lf seconds. \n", dcmg_time);
+    // printf("[info] Covariance Generation with time %lf seconds. \n", dcmg_time);
     /*
     Xrand_matrix(data->Am, data->An * data->batchCount, data->h_A, data->lda);
     for (int i = 0; i < data->batchCount; i++)
@@ -107,7 +106,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
     */
     // Xrand_matrix(data->Cm, data->Cn * data->batchCount, data->h_C, data->ldc);
     // printMatrixCPU(data->M, data->M, data->h_A, data->lda, i);
-
+    check_error(cudaGetLastError());
     for (int g = 0; g < data->ngpu; g++)
     {
         check_error(cudaSetDevice(data->devices[g]));
@@ -140,7 +139,6 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
         }
         */
     }
-
     if (data->vecchia)
     {   
         // printf("[info] The vecchia offset is starting now!\n");
@@ -431,26 +429,30 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
             // printf("[info] Finished GEAD. \n");
         }
 
-        // for (int g = 0; g < data->ngpu; g++)
-        // {
-        //     check_error(cudaSetDevice(data->devices[g]));
-        //     cudaDeviceSynchronize(); // TODO sync with streams instead
-        // }
+        for (int g = 0; g < data->ngpu; g++)
+        {
+            check_error(cudaSetDevice(data->devices[g]));
+            check_error(cudaDeviceSynchronize()); // TODO sync with streams instead
+            check_error(cudaGetLastError());
+        }
         clock_gettime(CLOCK_MONOTONIC, &end);
         vecchia_time = end.tv_sec - start.tv_sec + (end.tv_nsec - start.tv_nsec) / 1e9;
-
         // */conditioned part, \sigma_{12} inv (\sigma_{22}) \sigma_{21}
         // printf("[info] The vecchia offset is finished!  \n");
         // printf("[Info] The time for vecchia offset is %lf seconds \n", vecchia_time);
     }
-
-    printf("[info] Independent computing is starting now! \n");
-
+    // // printf("[info] Independent computing is starting now! \n");
+    // for (int g = 0; g < data->ngpu; g++)
+    // {
+    //     check_error(cudaSetDevice(data->devices[g]));
+    //     cudaDeviceSynchronize(); // TODO sync with streams instead
+    // }
     /*
     Independent computing
     */
     for (int g = 0; g < data->ngpu; g++)
-    {   
+    {      
+        check_error(cudaGetLastError());
         check_error(cudaSetDevice(data->devices[g]));
         if (data->strided)
         {
@@ -473,11 +475,6 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
     struct timespec start, end;
     clock_gettime(CLOCK_MONOTONIC, &start);
     
-    // for (int g = 0; g < data->ngpu; g++)
-    // {
-    //     check_error(cudaSetDevice(data->devices[g]));
-    //     cudaDeviceSynchronize(); // TODO sync with streams instead
-    // }
     for (int g = 0; g < data->ngpu; g++)
     {   
         check_error(cudaSetDevice(data->devices[g]));
@@ -674,10 +671,13 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
     }
     // printf("[info] Independent computing is finished! \n");
     // printf("[Info] The time for independent computing is %lf seconds\n", kblas_time_1);
-    printf("[Info] The time for LLH is %lf seconds\n", kblas_time_1 + vecchia_time);
-    printf("(Estimated) Sigma: %lf beta:  %lf  nu: %lf\n", localtheta[0], localtheta[1], localtheta[2]);
-    printf("Log likelihood is %lf \n", llk);
-    printf("-----------------------------------------------------------------------------\n");
+    // printf("[Info] The time for LLH is %lf seconds\n", kblas_time_1 + vecchia_time);
+    // // printf("(Estimated) Sigma: %lf beta:  %lf  nu: %lf\n", localtheta[0], localtheta[1], localtheta[2]);
+    // printf("Log likelihood is %lf \n", llk);
+    printf("%dth Model Parameters (Variance, range, smoothness): (%lf, %lf, %lf) -> Loglik: %lf \n", 
+            data->iterations, localtheta[0], localtheta[1], localtheta[2], llk);
+    data->iterations += 1;
+    // printf("-----------------------------------------------------------------------------\n");
 
     // if (data->vecchia){
     //     // init for each iteration (necessary but low efficient)

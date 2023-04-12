@@ -878,6 +878,12 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
   opts->vecchia_num =0; 
   opts->test =0;
 
+  // optimization setting
+  opts->tol = 1e-5;
+  opts->maxiter = 2;
+  opts->lower_bound = 0.001;
+  opts->upper_bound = 100.;
+
   if(argc < 2){
     USAGE
     exit(0);
@@ -1238,6 +1244,51 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
         opts->vecchia_num = num;
       }else{
         fprintf( stderr, "error: --vecchia_num %s is invalid; ensure only one number and 0 <= vecchia_num <= M.\n", argv[i]);
+        exit(1);
+      }
+    }
+    //used for optimization
+    else if ( (strcmp("--maxiter",   argv[i]) == 0) && i+1 < argc ) {
+      i++;
+      int maxiter;
+      info = sscanf( argv[i], "%d", &maxiter);
+      if( info == 1 && maxiter > 0 ){
+        opts->maxiter = maxiter;
+      }else{
+        fprintf( stderr, "error: --maxiter %s is invalid; ensure maxiter > 0 and be integer.\n", argv[i]);
+        exit(1);
+      }
+    }
+    else if ( (strcmp("--tol",   argv[i]) == 0) && i+1 < argc ) {
+      i++;
+      double tol;
+      info = sscanf( argv[i], "%lf", &tol);
+      if( info == 1 && tol > 0 ){
+        opts->tol = tol;
+      }else{
+        fprintf( stderr, "error: --tol %s is invalid; ensure tol > 0.\n", argv[i]);
+        exit(1);
+      }
+    }
+    else if ( (strcmp("--lower_bound",   argv[i]) == 0) && i+1 < argc ) {
+      i++;
+      double lower_bound;
+      info = sscanf( argv[i], "%lf", &lower_bound);
+      if( info == 1 && lower_bound > 0 ){
+        opts->lower_bound = lower_bound;
+      }else{
+        fprintf( stderr, "error: --lower_bound %s is invalid; ensure lower_bound > 0.\n", argv[i]);
+        exit(1);
+      }
+    }
+    else if ( (strcmp("--upper_bound",   argv[i]) == 0) && i+1 < argc ) {
+      i++;
+      double upper_bound;
+      info = sscanf( argv[i], "%lf", &upper_bound);
+      if( info == 1 && upper_bound < 100 ){
+        opts->upper_bound = upper_bound;
+      }else{
+        fprintf( stderr, "error: --upper_bound %s is invalid; ensure upper_bound < 100. (Or you fix 100 in opts file)\n", argv[i]);
         exit(1);
       }
     }
