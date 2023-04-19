@@ -880,9 +880,18 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
 
   // optimization setting
   opts->tol = 1e-5;
-  opts->maxiter = 2;
-  opts->lower_bound = 0.001;
-  opts->upper_bound = 100.;
+  opts->maxiter = 2000;
+  opts->lower_bound = 0.01;
+  opts->upper_bound = 5.;
+
+  // openmp
+  opts->omp_numthreads = 40;
+
+  //extra config
+  opts->kernel = 1;
+  opts->num_params = 3;
+  opts->num_loc = 40000;
+  opts->zvecs = 1;
 
   if(argc < 2){
     USAGE
@@ -1289,6 +1298,41 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
         opts->upper_bound = upper_bound;
       }else{
         fprintf( stderr, "error: --upper_bound %s is invalid; ensure upper_bound < 100. (Or you fix 100 in opts file)\n", argv[i]);
+        exit(1);
+      }
+    }
+    // --- extra config
+    else if ( (strcmp("--kernel",   argv[i]) == 0) && i+1 < argc ) {
+      i++;
+      int kernel;
+      info = sscanf( argv[i], "%d", &kernel);
+      if( info == 1 && kernel == 1 ){
+        opts->kernel = 1;
+        opts->num_params = 3;
+      }else{
+        fprintf( stderr, "Other kernel is developing now!");
+        exit(1);
+      }
+    }
+    else if ( (strcmp("--num_loc",   argv[i]) == 0) && i+1 < argc ) {
+      i++;
+      int num_loc;
+      info = sscanf( argv[i], "%d", &num_loc);
+      if( info == 1 && num_loc == 40000 ){
+        opts->num_loc=40000;
+      }else{
+        fprintf( stderr, "Other dataset is developing now!");
+        exit(1);
+      }
+    }
+    else if ( (strcmp("--zvecs",   argv[i]) == 0) && i+1 < argc ) {
+      i++;
+      int zvecs;
+      info = sscanf( argv[i], "%d", &zvecs);
+      if( info == 1 && zvecs <= 50 ){
+        opts->zvecs=zvecs;
+      }else{
+        fprintf( stderr, "Your dataset does not contain the replicate more than 50!");
         exit(1);
       }
     }

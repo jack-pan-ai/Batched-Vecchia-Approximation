@@ -249,6 +249,12 @@ typedef struct kblas_opts
   int maxiter;
   double lower_bound;
   double upper_bound;
+
+  //extra config
+  int kernel;
+  int num_params;
+  int num_loc;
+  int zvecs;
   
 } kblas_opts;
 

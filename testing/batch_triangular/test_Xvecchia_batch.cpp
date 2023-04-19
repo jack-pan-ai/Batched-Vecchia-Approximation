@@ -115,16 +115,10 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     // used for the store the memory of offsets for mu and sigma
     T *d_A_offset[ngpu], *d_mu_offset[ngpu];
     T *d_C_copy[ngpu];
-    // geam operations
-    // T ALPHA_OFFSET_1 = 1;
-    // T BETA_OFFSET_1 = -1;
-    // extra memory for mu, which can be optimized
-    // T *h_mu;
-    // T *d_mu[ngpu], *d_mu_copy[ngpu];
 
-    // T c_one = make_one<T>(),
-    //   c_neg_one = make_zero<T>() - make_one<T>();
-    // T work[1];
+    // time 
+    double whole_time = 0;
+    
 #ifdef DEBUG_DUMP
     FILE *outK, *outL, *outO;
 #endif
@@ -325,14 +319,18 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                 // Uniform random generation for locations / read locations from disk
                 // random generate with seed as 1
                 // locations = GenerateXYLoc(batchCount * lda, 1);
-                int nn = 57600;
-                locations = load_dist_CSV("./data_xy_57600.csv", nn); // 57600
-                load_obs_CSV<T>("./data_z_57600.csv", nn, h_C);
-                if (batchCount * lda != 57600) {
-                    fprintf(stderr, "Error: batchCount * lda is not equal to 57600\n");
+                createLogFileParams(opts.num_loc, M, opts.zvecs);
+                std::string xy_path = "./data/synthetic_ds/LOC_40000_univariate_matern_stationary_" \
+                            + std::to_string(opts.zvecs);
+                std::string z_path = "./data/synthetic_ds/Z1_40000_univariate_matern_stationary_" \
+                            + std::to_string(opts.zvecs);
+                locations = loadXYcsv(xy_path, opts.num_loc); 
+                loadObscsv<T>(z_path, opts.num_loc, h_C);
+                if (batchCount * M != opts.num_loc) {
+                    fprintf(stderr, "Error: batchCount * lda is not equal to %d\n", opts.num_loc);
                     exit(0); // Exit the program with a non-zero status to indicate an error
                 }
-                // printLocations(nn, locations);
+                // printLocations(opts.num_loc, locations);
                 // printLocations(batchCount * lda, locations);
                 if (opts.vecchia){
                     // init for each iteration (necessary but low efficient)
@@ -344,11 +342,11 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                     }                
                 }
                 // true parameter
-                TESTING_MALLOC_CPU(localtheta, T, 3); // no nugget effect
-                localtheta[0] = opts.sigma;
-                localtheta[1] = opts.beta;
-                localtheta[2] = opts.nu;
-                // TESTING_MALLOC_CPU(localtheta_initial, T, 3); // no nugget effect
+                TESTING_MALLOC_CPU(localtheta, T, opts.num_params); // no nugget effect
+                // localtheta[0] = opts.sigma;
+                // localtheta[1] = opts.beta;
+                // localtheta[2] = opts.nu;
+                // TESTING_MALLOC_CPU(localtheta_initial, T, opts.num_params); // no nugget effect
                 // localtheta_initial[0] = 0.01;
                 // localtheta_initial[1] = 0.01;
                 // localtheta_initial[2] = 0.01;
@@ -402,6 +400,15 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                 data.vecchia = opts.vecchia;
                 data.vecchia_num = opts.vecchia_num;
                 data.iterations = 0;
+                data.omp_threads = opts.omp_numthreads;
+
+                data.num_loc = opts.num_loc;
+                // kernel related
+                data.kernel = opts.kernel;
+                data.num_params = opts.num_params;
+                data.zvecs = opts.zvecs;
+
+
                 
 
                 for (int i=0; i < ngpu; i++)
@@ -425,34 +432,36 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                     data.devices[i] = opts.devices[i];
                 }
 
+                struct timespec start_whole, end_whole;
+                clock_gettime(CLOCK_MONOTONIC, &start_whole);
+
                 // Set up the optimization problem
-                int n = 3; //matern without nugget 
-                nlopt::opt opt(nlopt::LN_BOBYQA, n); // Use the BOBYQA algorithm in 2 dimensions
-                std::vector<T> lb(n, opts.lower_bound);
-                std::vector<T> ub(n, opts.upper_bound);
+                nlopt::opt opt(nlopt::LN_BOBYQA, opts.num_params); // Use the BOBYQA algorithm in 2 dimensions
+                std::vector<T> lb(opts.num_params, opts.lower_bound);
+                std::vector<T> ub(opts.num_params, opts.upper_bound);
                 opt.set_lower_bounds(lb);
                 opt.set_upper_bounds(ub);
                 opt.set_ftol_rel(opts.tol);
                 opt.set_maxeval(opts.maxiter);
                 opt.set_max_objective(llh_Xvecchia_batch, &data); // Pass a pointer to the data structure
 
-                // Set the initial guess
+                // Set the initial guess from lower bound
                 // std::vector<T> localtheta_initial = {0.174250, 0.1, 0.1};
-                std::vector<T> localtheta_initial(n, 0.1);
+                std::vector<T> localtheta_initial(opts.num_params, opts.lower_bound);
                 // Optimize the log likelihood
                 T maxf;
                 nlopt::result result = opt.optimize(localtheta_initial, maxf);
+                
+                double max_llh = opt.last_optimum_value();
+                int num_iterations = opt.get_numevals();
 
+                clock_gettime(CLOCK_MONOTONIC, &end_whole);
+                whole_time = end_whole.tv_sec - start_whole.tv_sec + (end_whole.tv_nsec - start_whole.tv_nsec) / 1e9;
+                saveLogFileSum(num_iterations, localtheta_initial[0], localtheta_initial[1], localtheta_initial[2], 
+                                max_llh, whole_time, M, opts.num_loc, opts.zvecs);
                 // int num_evals = 0;
                 // num_evals = opt.get_numevals();
                 printf("Done! \n");
-                // Print the results
-                // printf("%dth Model Parameters (Variance, range, smoothness): (%lf, %lf, %lf) -> Loglik: %lf \n", 
-                //         num_evals, localtheta_initial[0], localtheta_initial[1], localtheta_initial[2], maxf);
-                // printf("Maximum log likelihood: %lf \n ", maxf);
-                // printf("Optimal parameters: (%lf, %lf, %lf) \n", localtheta_initial[0], 
-                //                                             localtheta_initial[1], 
-                //                                             localtheta_initial[2]);
 
                 // vecchia
                 cudaFreeHost(h_A_copy);

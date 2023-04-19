@@ -70,6 +70,15 @@ typedef struct llh_data {
     // iter
     int iterations;
 
+    // openmp 
+    int omp_threads;
+
+    //extra config
+    int kernel;
+    int num_params;
+    int num_loc;
+    int zvecs;
+
     kblasHandle_t *kblas_handle[NGPU_MAX_NUM];
 } llh_data;
 
