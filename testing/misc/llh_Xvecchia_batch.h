@@ -691,6 +691,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
     printf("%dth Model Parameters (Variance, range, smoothness): (%lf, %lf, %lf) -> Loglik: %lf \n", 
             data->iterations, localtheta[0], localtheta[1], localtheta[2], llk); 
     data->iterations += 1;
+    data->vecchia_time_total += (indep_time + vecchia_time);  
     // printf("-----------------------------------------------------------------------------\n");
 
     // if (data->vecchia){

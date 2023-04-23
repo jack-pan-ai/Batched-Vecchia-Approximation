@@ -1318,18 +1318,13 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
       i++;
       int num_loc;
       info = sscanf( argv[i], "%d", &num_loc);
-      if( info == 1 && num_loc == 40000 ){
-        opts->num_loc=40000;
-      }else{
-        fprintf( stderr, "Other dataset is developing now!");
-        exit(1);
-      }
+      opts->num_loc=num_loc;
     }
     else if ( (strcmp("--zvecs",   argv[i]) == 0) && i+1 < argc ) {
       i++;
       int zvecs;
       info = sscanf( argv[i], "%d", &zvecs);
-      if( info == 1 && zvecs <= 50 ){
+      if( info == 1 && zvecs <= 10000 ){
         opts->zvecs=zvecs;
       }else{
         fprintf( stderr, "Your dataset does not contain the replicate more than 50!");

@@ -8,4 +8,3 @@ testing/test.sh
 testing/data/batchsize_*/
 testing/data/outputs_sum/
 testing/data/synthetic_*/
-testing/data_tol5/

@@ -79,6 +79,9 @@ typedef struct llh_data {
     int num_loc;
     int zvecs;
 
+    //vecchia time monitoring
+    double vecchia_time_total;
+
     kblasHandle_t *kblas_handle[NGPU_MAX_NUM];
 } llh_data;
 
