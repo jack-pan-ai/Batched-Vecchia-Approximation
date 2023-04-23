@@ -1,2 +1,10 @@
 obj/
 bin/
+.vscode/
+lib/libkblas-gpu.a
+test_cublas
+test_cublas.cpp
+testing/test.sh
+testing/data/batchsize_*/
+testing/data/outputs_sum/
+testing/data/synthetic_*/

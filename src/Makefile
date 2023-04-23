@@ -5,6 +5,8 @@ KBLAS_ROOT= ..
 INC=-I${KBLAS_ROOT}/include
 INC+= -I.
 INC+= -I${_CUDA_ROOT_}/include
+INC+= -I${_NLOPT_ROOT_}/include
+INC+= -I${_GSL_ROOT_}/include
 ifdef _USE_MAGMA_
 INC+= -I$(_MAGMA_ROOT_)/include
 endif

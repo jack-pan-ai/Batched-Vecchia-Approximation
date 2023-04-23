@@ -10,6 +10,9 @@ INCLUDES=
 INCLUDES+= -I.
 INCLUDES+= -I${_CUDA_ROOT_}/include
 INCLUDES+= -I${_KBLAS_ROOT_}/include -I${_KBLAS_ROOT_}/src
+INCLUDES+= -I${_NLOPT_ROOT_}/include
+INCLUDES+= -I${_GSL_ROOT_}/include
+
 ifdef _USE_MAGMA_
 	INCLUDES+= -I$(_MAGMA_ROOT_)/include
 endif
@@ -23,6 +26,9 @@ endif
 LIB_PATH=
 LIB_PATH+= -L${_CUDA_ROOT_}/lib64
 LIB_PATH+= -L${_KBLAS_ROOT_}/lib
+LIB_PATH+= -L${_NLOPT_ROOT_}/lib
+LIB_PATH+= -L${_GSL_ROOT_}/lib
+
 ifdef _USE_MAGMA_
 	LIB_PATH+= -L${_MAGMA_ROOT_}/lib
 endif
@@ -35,6 +41,7 @@ endif
 
 # libraries to link against
 LIB= -lm -l${LIB_KBLAS_NAME}
+LIB+= -lnlopt  -lgsl
 ifdef _USE_MAGMA_
 	LIB+= -lmagma -lcusparse
 endif
@@ -54,23 +61,26 @@ LIB+= -lstdc++
 KBLAS_LIB=../lib/lib${LIB_KBLAS_NAME}.a
 
 C_SRC=
-INC_SRC=testing_utils.h testing_Xtr_common.h testing_helper.h
+INC_SRC=testing_utils.h testing_Xtr_common.h testing_helper.h ckernel.h
 
 OBJ_DIR=./obj
 # C_OBJ =
 
 BIN_DIR=./bin
 
+#$(info $$_SUPPORT_BLAS2_ is [${_SUPPORT_BLAS2_}])
 ifdef _SUPPORT_BLAS2_
 KBLAS_TEST2_DIR=blas_l2
 include $(KBLAS_TEST2_DIR)/Makefile
 endif
 
+#$(info $$_SUPPORT_BLAS3_ is [${_SUPPORT_BLAS3_}])
 ifdef _SUPPORT_BLAS3_
 KBLAS_TEST3_DIR=blas_l3
 include $(KBLAS_TEST3_DIR)/Makefile
 endif
 
+#$(info $$_SUPPORT_BATCH_TR_ is [${_SUPPORT_BATCH_TR_}])
 ifdef _SUPPORT_BATCH_TR_
 KBLAS_BATCH_DIR=batch_triangular
 include $(KBLAS_BATCH_DIR)/Makefile
@@ -89,11 +99,14 @@ all: $(EXE_L2) $(EXE_L3) $(EXE_BATCH) $(EXE_TLR)
 $(OBJ_DIR)/testing_helper.o: testing_helper.cu
 	$(NVCC) $(NVOPTS) $(NVOPTS_3) $(INCLUDES) $(NVCCFLAGS) -c $< -o $@
 
+$(OBJ_DIR)/ckernel.o: ckernel.cpp
+	$(CXX) $(COPTS) $(INCLUDES) -c $< -o $@
+
 $(EXE_TLR): $(BIN_DIR)/%: $(OBJ_DIR)/%.o $(KBLAS_LIB) $(OBJ_DIR)/testing_helper.o
 	$(CC) $(COPTS) $(OBJ_DIR)/testing_helper.o $< -o $@ $(LIB_PATH) $(LIB)
 
-$(EXE_BATCH): $(BIN_DIR)/%: $(OBJ_DIR)/%.o $(KBLAS_LIB) $(OBJ_DIR)/testing_helper.o
-	$(CC) $(COPTS) $(OBJ_DIR)/testing_helper.o $< -o $@ $(LIB_PATH) $(LIB)
+$(EXE_BATCH): $(BIN_DIR)/%: $(OBJ_DIR)/%.o $(KBLAS_LIB) $(OBJ_DIR)/testing_helper.o $(OBJ_DIR)/ckernel.o
+	$(CC) $(COPTS) $(OBJ_DIR)/testing_helper.o $(OBJ_DIR)/ckernel.o $< -o $@ $(LIB_PATH) $(LIB)
 
 $(EXE_L2): $(BIN_DIR)/%: $(OBJ_DIR)/%.o $(KBLAS_LIB)
 	$(CC) $(COPTS) $< -o $@ $(LIB_PATH) $(LIB)
