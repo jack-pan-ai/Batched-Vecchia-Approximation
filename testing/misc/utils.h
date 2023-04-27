@@ -22,16 +22,6 @@ location *loadXYcsv(const std::string& filename, int n)
     loc->z = NULL;
     std::ifstream file(filename);
     std::string line;
-    // std::getline(file, line); // skip header line
-    // int numLines = 0;
-    // while (std::getline(file, line))
-    // {
-    //     ++numLines;
-    // }
-    // file.clear();
-    // file.seekg(0, std::ios::beg);
-    // std::getline(file, line); // skip header line
-    // loc.z = new double[numLines];  // assuming z is also present in the file
     int i = 0;
     while (std::getline(file, line))
     {
@@ -94,7 +84,7 @@ void saveLogFileParams(int iter,T x, T y, T z, T llh, T time_llh, T time_Xcmg, i
     file.close(); // close the file
 }
 
-void createLogFileParams(int num_loc, int batchsize, int zvecs)
+void createLogFileParams(int num_loc, int batchsize, int zvecs, int p)
 {
     // zvecs is the zvecs th replicate
     std::string filename = "./data/batchsize_" + std::to_string(batchsize) \
@@ -108,73 +98,59 @@ void createLogFileParams(int num_loc, int batchsize, int zvecs)
     }
     
     if (file.tellp() == 0) // if the file is empty, write the headers
-    {
-        file << "iteration,sigma,range,smoothness,llh,time_llh,time_Xcmg" << std::endl;
+    {   
+        if (p == 1){ // univariate matern stationary
+            file << "iteration,sigma,range,smoothness,llh,time_llh,time_Xcmg" << std::endl;
+        }else if (p == 2){
+            file << "iteration,sigma1,sigma2,range,smoothness1,smoothness2,beta,llh,time_llh,time_Xcmg" << std::endl;
+        }else{
+            printf("It is developing now");
+            exit(0);
+        }
     }
 
     file.close(); // close the file
 }
 
-// template <class T>
-// void saveLogFilePrint(int iterations, T theta1, T theta2, T theta3, T llk, int batchsize, int num_loc, int zvecs) {
-//     // zvecs is the zvecs th replicate
-//     std::string filename = "./data/batchsize_" + std::to_string(batchsize) \
-//                             +"/printed_" + std::to_string(num_loc) + '_' \
-//                             + std::to_string(batchsize) + '_' + std::to_string(zvecs) + ".csv";
-    
-//     // Open the log file in append mode
-//     std::ofstream logFile(filename, std::ios_base::app);
-
-//     // Redirect the output to the log file
-//     std::streambuf* orig_buf = std::cout.rdbuf();
-//     std::cout.rdbuf(logFile.rdbuf());
-
-//     // Print the log message to the log file using printf
-//     printf("%dth Model Parameters (Variance, range, smoothness): (%lf, %lf, %lf) -> Loglik: %lf  \n", iterations, theta1, theta2, theta3, llk);
-
-//     // Restore the original output stream
-//     std::cout.rdbuf(orig_buf);
-
-//     // Close the log file
-//     logFile.close();
-// }
-
 template <class T>
-void saveLogFileSum(int iterations, T theta1, T theta2, T theta3, T llk, double time, int batchsize, int num_loc, int zvecs) {
+void saveLogFileSum(int iterations, std::vector<T> theta, T llk, 
+                    double time, int batchsize, int num_loc, int zvecs) {
     // zvecs is the zvecs th replicate
     std::string filename = "./data/batchsize_" + std::to_string(batchsize) \
                             +"/sum_" + std::to_string(num_loc) + '_' \
                             + std::to_string(batchsize) + '_' + std::to_string(zvecs) + ".csv";
-    
-    // // Open the log file in append mode
-    // std::ofstream logFile(filename, std::ios_base::app);
-
-    // // Redirect the output to the log file
-    // std::streambuf* orig_buf = std::cout.rdbuf();
-    // std::cout.rdbuf(logFile.rdbuf());
 
     // Print the log message to the log file using printf
     printf("Total Number of Iterations = %d \n", iterations);
     printf("Total Optimization Time = %lf secs \n", time);
-    printf("Model Parameters (Variance, range, smoothness): (%lf, %lf, %lf) -> Loglik: %lf \n", theta1, theta2, theta3, llk);
+    if (theta.size() == 3){
+        printf("Model Parameters (Variance, range, smoothness): (%lf, %lf, %lf) -> Loglik: %lf \n",\
+                 theta[0], theta[1], theta[2], llk);
+        std::ofstream outfile(filename);
 
-    // // Restore the original output stream
-    // std::cout.rdbuf(orig_buf);
+        // Write the headers for the CSV file
+        outfile << "Iterations, Time, variance, range, smoothness, log-likelihood" << std::endl;
+        // Write the log data to the CSV file
+        outfile << iterations << ", " << time << ", " << theta[0] << ", " << theta[1] << ", " \
+                << theta[2] << ", " << llk << std::endl;
 
-    // // Close the log file
-    // logFile.close();
+        // Close the file
+        outfile.close();
+    }
+    else if (theta.size() == 6){
+        printf("Model Parameters (Variance1, Variance2, range, smoothness1, smoothness2, beta): (%lf, %lf, %lf, %lf, %lf, %lf) -> Loglik: %lf \n", \
+                theta[0], theta[1], theta[2], theta[3], theta[4], theta[5], llk);
+                // Open the CSV file for writing
+        std::ofstream outfile(filename);
 
-    // Open the CSV file for writing
-    std::ofstream outfile(filename);
-
-    // Write the headers for the CSV file
-    outfile << "Iterations, Time, variance, range, smoothness, log-likelihood" << std::endl;
-
-    // Write the log data to the CSV file
-    outfile << iterations << ", " << time << ", " << theta1 << ", " << theta2 << ", " << theta3 << ", " << llk << std::endl;
-
-    // Close the file
-    outfile.close();
+        // Write the headers for the CSV file
+        outfile << "Iterations, Time, variance1, variance2, range, smoothness1, smoothness2, beta, log-likelihood" << std::endl;
+        // Write the log data to the CSV file
+        outfile << iterations << ", " << time << ", " << theta[0] << ", " << theta[1] << ", " \
+                << theta[2] << ", " << theta[3] << ", " << theta[4] << ", " << theta[5] << ", " \
+                << llk << std::endl;
+        // Close the file
+        outfile.close();
+    }
 }
-
 #endif

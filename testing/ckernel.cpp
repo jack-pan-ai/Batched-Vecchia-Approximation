@@ -1032,13 +1032,15 @@ void core_dcmg(double* A, int m, int n,
 		j0 = 0;
 		for (j = 0; j < n; j++) {
 			expr = calculateDistance(l1, l2, i0, j0, distance_metric, 0) / localtheta[1];
+			expr /= 100.; /*comment it for synthetic dataset*/
+			// printf("%lf \n", expr);
 			if (expr == 0)
 				A[i + j * m] = sigma_square /*+ 1e-4*/;
 			else
 				A[i + j * m] = con * pow(expr, localtheta[2])
 					* gsl_sf_bessel_Knu(localtheta[2], expr); // Matern Function
-
 			j0++;
+			// printf("%lf\n", A[i + j * m]);
 		}
 		i0++;
 	}

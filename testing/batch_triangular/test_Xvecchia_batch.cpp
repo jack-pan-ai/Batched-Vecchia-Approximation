@@ -25,6 +25,7 @@
 #include <ctime>
 #include <nlopt.hpp>
 #include <vector>
+#include <gsl/gsl_errno.h>
 
 
 #if ((defined PREC_c) || (defined PREC_z)) && (defined USE_MKL)
@@ -102,8 +103,8 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     // location *locations_copy;
     location *locations_con_boundary;
     location *locations_con[opts.batchCount];
-    // no nugget
-    T *localtheta;
+    // // no nugget
+    // T *localtheta;
     // T *localtheta_initial;
     T *grad; // used for future gradient based optimization, please do not comment it
 
@@ -159,7 +160,7 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
             for (int btest = 0; btest < opts.btest; ++btest)
             {
 
-                int batchCount = opts.batchCount;
+                int batchCount = opts.batchCount * opts.p; // opts.p is the univariate/bivariate
                 if (opts.btest > 1)
                     batchCount = opts.batch[btest];
 
@@ -180,34 +181,6 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                 data.N = N;
 
                 fflush(stdout);
-
-                /* 
-                flops in total
-
-                if (nonUniform)
-                {
-                    max_M = max_N = 0;
-                    TESTING_MALLOC_CPU(h_M, int, batchCount);
-                    TESTING_MALLOC_CPU(h_N, int, batchCount);
-
-                    for (int k = 0; k < batchCount; k++)
-                    {
-                        h_M[k] = 1 + (rand() % M);
-                        h_N[k] = 1 + (rand() % N);
-                        max_M = kmax(max_M, h_M[k]);
-                        max_N = kmax(max_N, h_N[k]);
-                        gflops += FLOPS_TRSM<T>(opts.side, h_M[k], h_N[k]) / 1e9;
-                    }
-                }
-                else
-                {
-                    gflops = batchCount * FLOPS_TRSM<T>(opts.side, M, N) / 1e9;
-                    gflops += batchCount * FLOPS_POTRF<T>(M) / 1e9;
-                    gflops += batchCount * FLOPS_GEVV<T>(M) / 1e9;
-                    // used for determinant of triangular matrix
-                    gflops += batchCount * FLOPS_GEVV<T>(M) / 1e9;
-                }
-                */
 
                 if (opts.side == KBLAS_Left)
                 {
@@ -295,39 +268,48 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                     */
                 }
 
-                /* TODO
-                if (opts.check || opts.time)
-                {
-                    TESTING_MALLOC_CPU(h_R, T, ldc * Cn * batchCount);
+                
 
-#ifdef DEBUG_DUMP
-                    outO = fopen("outO.csv", "a");
-                    outK = fopen("outK.csv", "a");
-                    outL = fopen("outL.csv", "a");
-#endif
-                    if (opts.check)
-                    {
-                        opts.time = 0;
-                        nruns = 1;
-                    }
-                }
+                createLogFileParams(opts.num_loc, M, opts.zvecs, opts.p);
+                /* 
+                Dataset: defined by yourself 
                 */
-                // Xrand_matrix(Am, An * batchCount, h_A, lda);
-                /*
-                maftrix generation using kernel
-                */ 
                 // Uniform random generation for locations / read locations from disk
                 // random generate with seed as 1
-                // locations = GenerateXYLoc(batchCount * lda, 1);
-                createLogFileParams(opts.num_loc, M, opts.zvecs);
-                std::string xy_path = "./data/synthetic_ds/LOC_" + std::to_string(opts.num_loc) + "_univariate_matern_stationary_" \
-                            + std::to_string(opts.zvecs);
-                std::string z_path = "./data/synthetic_ds/Z1_" + std::to_string(opts.num_loc) + "_univariate_matern_stationary_" \
-                            + std::to_string(opts.zvecs);
-                locations = loadXYcsv(xy_path, opts.num_loc); 
-                loadObscsv<T>(z_path, opts.num_loc, h_C);
-                if (batchCount * M != opts.num_loc) {
-                    fprintf(stderr, "Error: batchCount * lda is not equal to %d\n", opts.num_loc);
+                locations = GenerateXYLoc(batchCount * lda, 1);
+                Xrand_matrix(Cm, Cn * batchCount, h_C, ldc);
+                // univariate case
+                // synthetic dataset (umcomment it if used)
+                // std::string xy_path = "./data/synthetic_ds/LOC_" + std::to_string(opts.num_loc) + "_univariate_matern_stationary_" \
+                //             + std::to_string(opts.zvecs);
+                // std::string z_path = "./data/synthetic_ds/Z1_" + std::to_string(opts.num_loc) + "_univariate_matern_stationary_" \
+                //             + std::to_string(opts.zvecs);
+                // data.distance_metric = 0;
+                //// real dataset soil (umcomment it if used)
+                // std::string xy_path = "./data/soil_moisture/R" + std::to_string(opts.zvecs) + \
+                //                         "/METAinfo";
+                // std::string z_path = "./data/soil_moisture/R" + std::to_string(opts.zvecs) + \
+                //                         "/ppt.complete.Y001";
+                // data.distance_metric = 1;
+                // locations = loadXYcsv(xy_path, opts.num_loc); 
+                // loadObscsv<T>(z_path, opts.num_loc, h_C);
+                // bivaraite case (umcomment it if used)
+                // std::string xy_path = "./data6K_bivariate/synthetic_ds/LOC_" + std::to_string(opts.num_loc) + \
+                //                         "_bivariate_matern_parsimonious_" + std::to_string(opts.zvecs);
+                // std::string z1_path = "./data6K_bivariate/synthetic_ds/Z1_" + std::to_string(opts.num_loc) + \
+                //                         "_univariate_matern_stationary_" + std::to_string(opts.zvecs);
+                // std::string z2_path = "./data6K_bivariate/synthetic_ds/Z2_" + std::to_string(opts.num_loc) + \
+                //                         "_univariate_matern_stationary_" + std::to_string(opts.zvecs);                                        
+                // locations = loadXYcsv(xy_path, opts.num_loc); 
+                // loadObscsv<T>(z_path, opts.num_loc, h_C);
+                // loadObscsv<T>(z_path, opts.num_loc, h_C + opts.num_loc);
+                /*
+                Dataset: defined by yourself 
+                */
+
+                if (batchCount * M / opts.p != opts.num_loc) {
+                    // printf("batchCount: ");
+                    fprintf(stderr, "Error: batchCount * lda / p %d is not equal to %d\n", batchCount * M / opts.p, opts.num_loc);
                     exit(0); // Exit the program with a non-zero status to indicate an error
                 }
                 // printLocations(opts.num_loc, locations);
@@ -341,8 +323,8 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                         data.locations_con[i] = locations_con[i];
                     }                
                 }
-                // true parameter
-                TESTING_MALLOC_CPU(localtheta, T, opts.num_params); // no nugget effect
+                // // true parameter
+                // TESTING_MALLOC_CPU(localtheta, T, opts.num_params); // no nugget effect
                 // localtheta[0] = opts.sigma;
                 // localtheta[1] = opts.beta;
                 // localtheta[2] = opts.nu;
@@ -378,8 +360,8 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                 //     *d_M[ngpu], *d_N[ngpu];
                 data.h_A = h_A;
                 data.h_C = h_C;
-                // no nugget
-                data.localtheta = localtheta;
+                // // no nugget
+                // data.localtheta = localtheta;
                 data.locations = locations;
                 data.locations_con_boundary = locations_con_boundary;
                 // vecchia offset
@@ -408,9 +390,8 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                 data.num_params = opts.num_params;
                 data.zvecs = opts.zvecs;
                 data.vecchia_time_total = 0; // used for accumulatet the time on vecchia
-
-
-                
+                data.p = opts.p; //bivariate = 2 or univariate = 1
+ 
 
                 for (int i=0; i < ngpu; i++)
                 {
@@ -439,7 +420,10 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                 // Set up the optimization problem
                 nlopt::opt opt(nlopt::LN_BOBYQA, opts.num_params); // Use the BOBYQA algorithm in 2 dimensions
                 std::vector<T> lb(opts.num_params, opts.lower_bound);
-                std::vector<T> ub(opts.num_params, opts.upper_bound);
+                std::vector<T> ub(opts.num_params, opts.upper_bound); 
+                if (opts.kernel == 2){ // bivariate matern kernel 
+                    ub.back() = 1. ;// beta should be constrained somehow
+                }
                 opt.set_lower_bounds(lb);
                 opt.set_upper_bounds(ub);
                 opt.set_ftol_rel(opts.tol);
@@ -447,7 +431,7 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                 opt.set_max_objective(llh_Xvecchia_batch, &data); // Pass a pointer to the data structure
 
                 // Set the initial guess from lower bound
-                // std::vector<T> localtheta_initial = {0.174250, 0.1, 0.1};
+                // std::vector<T> localtheta_initial = {0.481, 0.10434, 0.500};
                 std::vector<T> localtheta_initial(opts.num_params, opts.lower_bound);
                 // Optimize the log likelihood
                 T maxf;
@@ -458,8 +442,9 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
 
                 clock_gettime(CLOCK_MONOTONIC, &end_whole);
                 whole_time = end_whole.tv_sec - start_whole.tv_sec + (end_whole.tv_nsec - start_whole.tv_nsec) / 1e9;
-                saveLogFileSum(num_iterations, localtheta_initial[0], localtheta_initial[1], localtheta_initial[2], 
-                                max_llh, /* whole_time */data.vecchia_time_total, M, opts.num_loc, opts.zvecs);
+                saveLogFileSum(num_iterations, localtheta_initial, 
+                                max_llh, /* whole_time */data.vecchia_time_total, 
+                                M, opts.num_loc, opts.zvecs);
                 // int num_evals = 0;
                 // num_evals = opt.get_numevals();
                 printf("Done! \n");
@@ -565,5 +550,6 @@ int main(int argc, char **argv)
 #elif defined PREC_z
     TYPE alpha = make_cuDoubleComplex(1.2, -0.6);
 #endif
+    gsl_set_error_handler_off();
     return test_Xvecchia_batch<TYPE>(opts, alpha);
 }

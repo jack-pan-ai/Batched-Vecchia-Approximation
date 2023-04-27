@@ -82,6 +82,12 @@ typedef struct llh_data {
     //vecchia time monitoring
     double vecchia_time_total;
 
+    // bivariate
+    int p;
+
+    // real dataset
+    int distance_metric; // 0 for euclidean; 1 for earth location.
+
     kblasHandle_t *kblas_handle[NGPU_MAX_NUM];
 } llh_data;
 

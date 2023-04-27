@@ -255,6 +255,9 @@ typedef struct kblas_opts
   int num_params;
   int num_loc;
   int zvecs;
+
+  // bivariate
+  int p;
   
 } kblas_opts;
 

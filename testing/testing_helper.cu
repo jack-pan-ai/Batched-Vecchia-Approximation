@@ -893,6 +893,9 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
   opts->num_loc = 40000;
   opts->zvecs = 1;
 
+  // bivariate 
+  opts->p = 1; // univaraite
+
   if(argc < 2){
     USAGE
     exit(0);
@@ -1308,8 +1311,14 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
       info = sscanf( argv[i], "%d", &kernel);
       if( info == 1 && kernel == 1 ){
         opts->kernel = 1;
-        opts->num_params = 3;
-      }else{
+        opts->num_params = 3; 
+        opts->p = 1; // univariate_matern_stationary
+      }else if (info == 1 && kernel == 2){
+        opts->kernel = 2;
+        opts->num_params = 6; 
+        opts->p = 2; // bivariate_matern_parsimonious
+      }
+      else{
         fprintf( stderr, "Other kernel is developing now!");
         exit(1);
       }
