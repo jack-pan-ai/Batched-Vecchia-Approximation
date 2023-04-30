@@ -63,7 +63,9 @@ void loadObscsv(const std::string& filename, int n, T* obs)
     file.close();
 }
 template <class T>
-void saveLogFileParams(int iter,T x, T y, T z, T llh, T time_llh, T time_Xcmg, int num_loc, int batchsize, int zvecs)
+void saveLogFileParams(int iter, const double* theta, T llh,
+                        T time_llh, T time_Xcmg, int num_loc, 
+                        int batchsize, int zvecs, int p)
 {
     // zvecs is the zvecs th replicate
     std::string filepath = "./data/batchsize_" + std::to_string(batchsize) \
@@ -78,8 +80,11 @@ void saveLogFileParams(int iter,T x, T y, T z, T llh, T time_llh, T time_Xcmg, i
     }
     
     std::ostringstream oss;
-    oss << iter << "," << x << "," << y << "," << z << "," << llh << "," << time_llh << "," << time_Xcmg  << std::endl; // create a comma-separated string of the values
-    
+    if (p == 1){
+        oss << iter << "," << theta[0] << "," << theta[1] << "," << theta[2] << "," << llh << "," << time_llh << "," << time_Xcmg  << std::endl; // create a comma-separated string of the values
+    }else if (p == 2){
+        oss << iter << "," << theta[0] << "," << theta[1] << "," << theta[2] << theta[3] << "," << theta[4] << "," << theta[5] << "," << llh << "," << time_llh << "," << time_Xcmg  << std::endl; // create a comma-separated string of the values
+    }
     file << oss.str(); // write the string to the file
     file.close(); // close the file
 }

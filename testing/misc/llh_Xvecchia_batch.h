@@ -5,9 +5,7 @@ template <class T>
 T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
 {   
     T llk = 0;
-    
     llh_data * data = static_cast<llh_data *>(f_data);
-    
     double kblas_perf = 0.0, kblas_time = 0.0, indep_time = 0.0, dcmg_time = 0.0, vecchia_time = 0.0;
     double alpha_1 = 1.;
     double beta_n1 = -1.;
@@ -24,83 +22,108 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
         // TESTING_MALLOC_CPU(data->locations_copy->y, double, data->batchCount * data->lda);
         // memcpy(data->locations_copy->x, data->locations->x, data->batchCount * data->lda * sizeof(double));
         // memcpy(data->locations_copy->y, data->locations->y, data->batchCount * data->lda * sizeof(double));
-        for (int i=0; i < data->batchCount; i ++){
-            data->locations_con[i]->x=&(data->locations->x[data->lda * i]);
-            data->locations_con[i]->y=&(data->locations->y[data->lda * i]); // 
+        for (int i=0; i < data->batchCount; i++){
+            data->locations_con[i]->x=&(data->locations->x[int(data->lda * i/data->p)]);
+            data->locations_con[i]->y=&(data->locations->y[int(data->lda * i/data->p)]); // 
             data->locations_con[i]->z = NULL;
+            // fprintf(stderr, "%d, \n", int(data->lda * i /data->p));
         }                   
+        // fprintf(stderr, "asdasdsa\n");
     }
+    // printf("asdsadasda------------\n");
+    // exit(0);
 
-    // for(int i =0; i< data->batchCount * data->lda; i++){
+    // for(int i =0; i< data->batchCount * data->lda / data->p; i++){
     //     printf("(x, y) is (%lf, %lf) \n", data->locations->x[i], data->locations->y[i]);
     //     printf("COPY (x, y) is (%lf, %lf) \n", data->locations_copy->x[i], data->locations_copy->y[i]);
+    //     // exit(0);
     // }
-
-    if (data->kernel == 1){
-        #pragma omp parallel for
-        for (int i = 0; i < data->batchCount; i++)
-        {
-            // printf("x_copy is %lf \n",data->locations_copy->x[0]);
-            location* loc_batch= (location *) malloc(sizeof (location)); // this is used for each batch 
-            // TESTING_MALLOC_CPU(loc_batch->x, double, data->lda); 
-            // TESTING_MALLOC_CPU(loc_batch->y, double, data->lda); 
-
-            loc_batch->x=&(data->locations->x[i*data->lda]);
-            loc_batch->y=&(data->locations->y[i*data->lda]);
-            loc_batch->z= NULL;
-            // fprintf(stderr, "ssdasd\n");
-
+    #pragma omp parallel for
+    for (int i=0; i < data->batchCount; i++)
+    {
+        // printf("x_copy is %lf \n",data->locations_copy->x[0]);
+        location* loc_batch= (location *) malloc(sizeof (location)); // this is used for each batch 
+        // TESTING_MALLOC_CPU(loc_batch->x, double, data->lda); 
+        // TESTING_MALLOC_CPU(loc_batch->y, double, data->lda); 
+        loc_batch->x=&(data->locations->x[int (i*data->lda / data->p)]);
+        loc_batch->y=&(data->locations->y[int (i*data->lda / data->p)]);
+        loc_batch->z= NULL;
+        if (data->kernel == 1){
             core_dcmg(data->h_A + i * data->An * data->lda,
                         data->lda, data->An,
                         loc_batch,
                         loc_batch, localtheta, data->distance_metric);
-            //  fprintf(stderr, "ssdasd\n");
-            //  exit(0);
-            // if (i>=12495){
-            //     printf("The conditioning covariance matrix.\n");
-            //     printMatrixCPU(data->M, data->M, data->h_A + i * data->An * data->lda, data->lda, i); 
-            // }
-
-            if (data->vecchia)
-            {
-                // used for vecchia offset, the first one would not be used for offset
-                if(i==0)
-                {      
-                    // this is used for the boundary, which no any meaning for llh
-                    data->locations_con_boundary = GenerateXYLoc(data->lda, 1);
-                    core_dcmg(data->h_A_conditioned, data->ldacon, data->An,
-                                                data->locations_con_boundary,
-                                                loc_batch, localtheta, data->distance_metric);
-                }    
-                else
-                {   
-                    data->locations_con[i-1]->x += (data->Am - data->Acon);
-                    data->locations_con[i-1]->y += (data->Am - data->Acon);
-                    // printf("x is %lf \n",data->locations_con->x[0]);
-                    // printf("y is %lf \n",data->locations_con->y[0]);
-                    // printf("x_copy is %lf \n",data->locations_copy->x[0]);
-                    // printf("y_copy is %lf \n",data->locations_copy->y[0]);
-                    core_dcmg(data->h_A_conditioned + i * data->An * data->ldacon,
-                            data->ldacon, data->An,
-                            data->locations_con[i-1],
-                            loc_batch, localtheta, data->distance_metric); //matrix size: data->lda by data->An
-                    // printf("The conditioned covariance matrix.\n");
-                    // printMatrixCPU(data->M, data->M, data->h_A_conditioned + i * data->An * data->lda, data->lda, i);
-                    // data->locations_con->x += data->Acon;
-                    // data->locations_con->y += data->Acon;
-                }
-            }
-
-            // obeservation initialization
-            // for (int j = 0; j < data->Cm; j++)
-            // {
-            //     data->h_C[j + i * data->Cm] = 1;
-            //     // h_mu[j + i * data->Cm] = 0;
-            // }
-            // data->locations_copy->x += data->An;
-            // data->locations_copy->y += data->An;
-            free(loc_batch);
+        }else if (data->kernel == 2){
+            core_dcmg_bivariate_parsimonious(data->h_A + i * data->An * data->lda,
+                                            data->lda, data->An,
+                                            loc_batch,
+                                            loc_batch, localtheta, data->distance_metric);
+        }else{
+            printf("The other kernel function has been developed.");
+            exit(0);
         }
+        // printf("The conditioning covariance matrix.\n");
+        // printMatrixCPU(data->M, data->M, data->h_A + i * data->An * data->lda, data->lda, i);
+        // exit(0);
+        if (data->vecchia)
+        {
+            // used for vecchia offset, the first one would not be used for offset
+            if(i==0)
+            {      
+                // this is used for the boundary, which no any meaning for llh
+                data->locations_con_boundary = GenerateXYLoc(data->lda, 1);
+                if (data->kernel == 1){
+                    core_dcmg(data->h_A_conditioned, data->ldacon, data->An,
+                                data->locations_con_boundary,
+                                loc_batch, localtheta, data->distance_metric);
+                }else if (data->kernel == 2){
+                    core_dcmg_bivariate_parsimonious(data->h_A_conditioned, data->ldacon, data->An,
+                                                    data->locations_con_boundary,
+                                                    loc_batch, localtheta, data->distance_metric);
+                }else{
+                    printf("The other kernel function has been developed.");
+                    exit(0);
+                }
+            }    
+            else
+            {   
+                data->locations_con[i-1]->x += (data->Am - data->Acon);
+                data->locations_con[i-1]->y += (data->Am - data->Acon);
+                // printf("x is %lf \n",data->locations_con->x[0]);
+                // printf("y is %lf \n",data->locations_con->y[0]);
+                // printf("x_copy is %lf \n",data->locations_copy->x[0]);
+                // printf("y_copy is %lf \n",data->locations_copy->y[0]);
+                if (data->kernel == 1){
+                    core_dcmg(data->h_A_conditioned + i * data->An * data->ldacon,
+                                data->ldacon, data->An,
+                                data->locations_con[i-1],
+                                loc_batch, localtheta, data->distance_metric);
+                }else if (data->kernel == 2){
+                    core_dcmg_bivariate_parsimonious(data->h_A_conditioned + i * data->An * data->ldacon,
+                                                    data->ldacon, data->An,
+                                                    data->locations_con[i-1],
+                                                    loc_batch, localtheta, data->distance_metric);
+                }else{
+                    printf("The other kernel function has been developed.");
+                    exit(0);
+                }
+                //matrix size: data->lda by data->An
+                // printf("The conditioned covariance matrix.\n");
+                // printMatrixCPU(data->M, data->M, data->h_A_conditioned + i * data->An * data->lda, data->lda, i);
+                // data->locations_con->x += data->Acon;
+                // data->locations_con->y += data->Acon;
+            }
+        }
+
+        // obeservation initialization
+        // for (int j = 0; j < data->Cm; j++)
+        // {
+        //     data->h_C[j + i * data->Cm] = 1;
+        //     // h_mu[j + i * data->Cm] = 0;
+        // }
+        // data->locations_copy->x += data->An;
+        // data->locations_copy->y += data->An;
+        free(loc_batch);
     }
     
     clock_gettime(CLOCK_MONOTONIC, &end_dcmg);
@@ -159,10 +182,20 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
             // pair with conditioned covariance matrix
             if (i==0){
                 // this does not matter, just some random number to make the matrix postive definite
-                core_dcmg(data->h_A_copy, data->Acon, data->Acon,
+                if (data->kernel == 1){
+                    core_dcmg(data->h_A_copy, data->Acon, data->Acon,
                                             data->locations_con_boundary,
                                             data->locations_con_boundary, 
                                             localtheta, data->distance_metric); 
+                }else if (data->kernel == 2){
+                    core_dcmg_bivariate_parsimonious(data->h_A_copy, data->Acon, data->Acon,
+                                            data->locations_con_boundary,
+                                            data->locations_con_boundary, 
+                                            localtheta, data->distance_metric); 
+                }else{
+                    printf("The other kernel function has been developed.");
+                    exit(0);
+                }
                 memcpy(data->h_C_conditioned, data->h_C, sizeof(T) * data->ldccon * data->Cn);
             }
             else{
@@ -411,7 +444,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
             if (data->strided)
             {
                 for (int i = 1; i < data->batchCount_gpu; i++)
-                {
+                {   
                     check_cublas_error(cublasXgeam(kblasGetCublasHandle(*(data->kblas_handle[g])),
                                                     CUBLAS_OP_N, CUBLAS_OP_N,
                                                     data->Am, data->An,
@@ -420,14 +453,6 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
                                                     &beta_n1, // -1
                                                     data->d_A_offset[g] + data->ldda * data->An * i, data->ldda,
                                                     data->d_A[g] + data->ldda * data->An * i, data->ldda)); // + data->ldda * data->An * i means the first one does not change
-                    // check_cublas_error(cublasXgeam(kblasGetCublasHandle(*(data->kblas_handle[g])),
-                    //                                CUBLAS_OP_N, CUBLAS_OP_N,
-                    //                                data->Cm, data->Cn,
-                    //                                alpha_offset_mu,
-                    //                                d_mu_copy[g] + data->lddc * data->Cn * i, data->ldda, data->ldda,
-                    //                                beta_offset_mu,
-                    //                                data->d_mu_offset[g], data->lddc, data->Cn * data->lddc,
-                    //                                d_mu[g] + data->lddc * data->Cn * i, data->lddc));
                 }
             }
             // for (int i = 0; i < data->batchCount_gpu; i++)
@@ -684,14 +709,19 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
     // printf("[Info] The time for LLH is %lf seconds\n", indep_time + vecchia_time);
     // // printf("(Estimated) Sigma: %lf beta:  %lf  nu: %lf\n", localtheta[0], localtheta[1], localtheta[2]);
     // printf("Log likelihood is %lf \n", llk);
-
     saveLogFileParams(data->iterations, 
-                    localtheta[0], localtheta[1], localtheta[2], llk, 
+                    localtheta, llk, 
                     indep_time + vecchia_time, dcmg_time, 
                     data->num_loc, data->M,
-                    data->zvecs); // this is log_tags for write a file
-    printf("%dth Model Parameters (Variance, range, smoothness): (%lf, %lf, %lf) -> Loglik: %lf \n", 
+                    data->zvecs, data->p); // this is log_tags for write a file
+    if (data->kernel ==1){
+        printf("%dth Model Parameters (Variance, range, smoothness): (%lf, %lf, %lf) -> Loglik: %lf \n", 
             data->iterations, localtheta[0], localtheta[1], localtheta[2], llk); 
+    }else if (data->kernel ==2){
+        printf("%dth Model Parameters (Variance1, Variance2, range, smoothness1, smoothness2, beta): (%lf, %lf, %lf, %lf, %lf, %lf) -> Loglik: %lf \n", 
+            data->iterations, localtheta[0], localtheta[1], localtheta[2], 
+            localtheta[3], localtheta[4], localtheta[5], llk); 
+    }
     data->iterations += 1;
     data->vecchia_time_total += (indep_time + vecchia_time);  
     // printf("-----------------------------------------------------------------------------\n");

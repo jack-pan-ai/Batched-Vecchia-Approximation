@@ -162,7 +162,7 @@ void printMatrixCPU(int m, int n, T *h_A, int lda, int i)
     {
       // colunm-wised matrix
       // printf("(%d)", i + j * lda);
-      printf("%lf ,", (double)h_A[i + j * lda]);
+      printf("%lg ,", (double)h_A[i + j * lda]);
       // printf(", ");
     }
     printf("\n");

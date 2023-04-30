@@ -164,9 +164,13 @@ void core_sdcmg_pow_exp(double* A, int m, int n,
                         location *l1, location *l2,
                         double* localtheta, int distance_metric);
 
+// void core_dcmg_bivariate_parsimonious(double* A, int m, int n,
+//                                       int m0, int n0, location *l1,
+//                                       location *l2, double* localtheta, int distance_metric);
 void core_dcmg_bivariate_parsimonious(double* A, int m, int n,
-                                      int m0, int n0, location *l1,
-                                      location *l2, double* localtheta, int distance_metric);
+                                    //   int m0, int n0, 
+                                      location *l1,
+                                      location *l2, const double* localtheta, int distance_metric);
 
 void core_dcmg_bivariate_parsimonious2(double* A, int m, int n,
                                        int m0, int n0, location *l1,

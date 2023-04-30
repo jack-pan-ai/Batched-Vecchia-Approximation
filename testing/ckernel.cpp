@@ -1681,12 +1681,15 @@ void core_dcmg_bivariate_flexible(double* A, int m, int n,
  *
  ******************************************************************************/
 void core_dcmg_bivariate_parsimonious(double* A, int m, int n,
-		int m0, int n0, location* l1,
-		location* l2, double* localtheta, int distance_metric) {
+		// int m0, int n0, 
+		location* l1,
+		location* l2, const double* localtheta, int distance_metric) {
 
 	int i, j;
-	int i0 = m0;
-	int j0 = n0;
+	// int i0 = m0;
+	// int j0 = n0;
+	int i0 = 0;
+	int j0 = 0;
 	double x0, y0;
 	double expr = 0.0;
 	double con1 = 0.0, con2 = 0.0, con12 = 0.0, rho = 0.0, nu12 = 0.0;
@@ -1711,12 +1714,17 @@ void core_dcmg_bivariate_parsimonious(double* A, int m, int n,
 	con12 = 1.0 / con12;
 	con12 = rho * sqrt(localtheta[0] * localtheta[1]) * con12;
 
-	i0 /= 2;
+	// printf("%lf \n", con1);
+	// printf("%lf \n", con2);
+	// printf("%lf \n", con12);
+	// printf("--------------------\n");
+	// i0 /= 2;
 	for (i = 0; i < m - 1; i += 2) {
-		j0 = n0 / 2;
+		// j0 = n0 / 2;
+		j0 = 0;
 		for (j = 0; j < n - 1; j += 2) {
 			expr = calculateDistance(l1, l2, i0, j0, distance_metric, 0) / localtheta[2];
-
+			// printf("%d, %d, %lg, %lg\n", i0, j0, expr, con1 * pow(expr, localtheta[3]) * gsl_sf_bessel_Knu(localtheta[3], expr));
 			if (expr == 0) {
 				A[i + j * m] = localtheta[0];
 				A[(i + 1) + j * m] = A[i + (j + 1) * m] = rho

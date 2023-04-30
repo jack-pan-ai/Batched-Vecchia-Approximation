@@ -160,20 +160,21 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
             for (int btest = 0; btest < opts.btest; ++btest)
             {
 
-                int batchCount = opts.batchCount * opts.p; // opts.p is the univariate/bivariate
-                if (opts.btest > 1)
-                    batchCount = opts.batch[btest];
+                int batchCount = opts.batchCount; 
+                
+                // if (opts.btest > 1)
+                //     batchCount = opts.batch[btest];
 
                 int batchCount_gpu = batchCount / ngpu;
 
-                /*
-                seed for location generation
-                */
-                int seed[batchCount];
-                for (int i = 0; i < batchCount; i++)
-                {
-                    seed[i] = i + 1;
-                }
+                // /*
+                // seed for location generation
+                // */
+                // int seed[batchCount];
+                // for (int i = 0; i < batchCount; i++)
+                // {
+                //     seed[i] = i + 1;
+                // }
 
                 M = opts.msize[itest];
                 N = opts.nsize[itest];
@@ -269,21 +270,29 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                 }
 
                 
-
                 createLogFileParams(opts.num_loc, M, opts.zvecs, opts.p);
                 /* 
                 Dataset: defined by yourself 
                 */
                 // Uniform random generation for locations / read locations from disk
                 // random generate with seed as 1
-                locations = GenerateXYLoc(batchCount * lda, 1);
-                Xrand_matrix(Cm, Cn * batchCount, h_C, ldc);
+                locations = GenerateXYLoc(batchCount * lda / opts.p, 1);
+                // Xrand_matrix(Cm, Cn * batchCount, h_C, ldc);
+                for(int i = 0; i < Cm * batchCount; i++) h_C[i] = 1.;
+                // printLocations(opts.num_loc, locations);
+                // for(int i = 0; i < Cm * batchCount; i++) printf("%ith %lf \n",i, h_C[i]);
                 // univariate case
                 // synthetic dataset (umcomment it if used)
                 // std::string xy_path = "./data/synthetic_ds/LOC_" + std::to_string(opts.num_loc) + "_univariate_matern_stationary_" \
                 //             + std::to_string(opts.zvecs);
                 // std::string z_path = "./data/synthetic_ds/Z1_" + std::to_string(opts.num_loc) + "_univariate_matern_stationary_" \
                 //             + std::to_string(opts.zvecs);
+                // std::string xy_path = "./data/synthetic_ds/LOC_" + std::to_string(opts.num_loc) \
+                //             + std::to_string(opts.zvecs);
+                // std::string z_path = "./data/synthetic_ds/Z1_" + std::to_string(opts.num_loc) \
+                //             + std::to_string(opts.zvecs);
+                // locations = loadXYcsv(xy_path, int(opts.num_loc/opts.p)); 
+                // loadObscsv<T>(z_path, int(opts.num_loc/opts.p), h_C);
                 // data.distance_metric = 0;
                 //// real dataset soil (umcomment it if used)
                 // std::string xy_path = "./data/soil_moisture/R" + std::to_string(opts.zvecs) + \
@@ -293,25 +302,24 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                 // data.distance_metric = 1;
                 // locations = loadXYcsv(xy_path, opts.num_loc); 
                 // loadObscsv<T>(z_path, opts.num_loc, h_C);
+
                 // bivaraite case (umcomment it if used)
-                // std::string xy_path = "./data6K_bivariate/synthetic_ds/LOC_" + std::to_string(opts.num_loc) + \
+                // std::string xy_path = "./data/synthetic_ds/LOC_" + std::to_string(int(opts.num_loc/opts.p)) + \
                 //                         "_bivariate_matern_parsimonious_" + std::to_string(opts.zvecs);
-                // std::string z1_path = "./data6K_bivariate/synthetic_ds/Z1_" + std::to_string(opts.num_loc) + \
-                //                         "_univariate_matern_stationary_" + std::to_string(opts.zvecs);
-                // std::string z2_path = "./data6K_bivariate/synthetic_ds/Z2_" + std::to_string(opts.num_loc) + \
-                //                         "_univariate_matern_stationary_" + std::to_string(opts.zvecs);                                        
-                // locations = loadXYcsv(xy_path, opts.num_loc); 
-                // loadObscsv<T>(z_path, opts.num_loc, h_C);
-                // loadObscsv<T>(z_path, opts.num_loc, h_C + opts.num_loc);
+                // std::string z_path = "./data/synthetic_ds/Z_" + std::to_string(int(opts.num_loc/opts.p)) + \
+                //                         "_bivariate_matern_parsimonious_" + std::to_string(opts.zvecs);
+                // locations = loadXYcsv(xy_path, int(opts.num_loc/opts.p)); 
+                // loadObscsv<T>(z_path, int(opts.num_loc/opts.p), h_C);
+                // data.distance_metric = 0;
                 /*
                 Dataset: defined by yourself 
                 */
 
-                if (batchCount * M / opts.p != opts.num_loc) {
+                if (batchCount * M != opts.num_loc) {
                     // printf("batchCount: ");
-                    fprintf(stderr, "Error: batchCount * lda / p %d is not equal to %d\n", batchCount * M / opts.p, opts.num_loc);
+                    fprintf(stderr, "Error: batchCount * lda %d is not equal to %d\n", batchCount * M, opts.num_loc);
                     exit(0); // Exit the program with a non-zero status to indicate an error
-                }
+                }  
                 // printLocations(opts.num_loc, locations);
                 // printLocations(batchCount * lda, locations);
                 if (opts.vecchia){
@@ -332,7 +340,6 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                 // localtheta_initial[0] = 0.01;
                 // localtheta_initial[1] = 0.01;
                 // localtheta_initial[2] = 0.01;
-
 
                 // prepare these for llh_Xvecchia_batch
                 data.M = M;
@@ -391,8 +398,7 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                 data.zvecs = opts.zvecs;
                 data.vecchia_time_total = 0; // used for accumulatet the time on vecchia
                 data.p = opts.p; //bivariate = 2 or univariate = 1
- 
-
+                
                 for (int i=0; i < ngpu; i++)
                 {
                     data.kblas_handle[i] = &(kblas_handle[i]);
@@ -416,7 +422,6 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
 
                 struct timespec start_whole, end_whole;
                 clock_gettime(CLOCK_MONOTONIC, &start_whole);
-
                 // Set up the optimization problem
                 nlopt::opt opt(nlopt::LN_BOBYQA, opts.num_params); // Use the BOBYQA algorithm in 2 dimensions
                 std::vector<T> lb(opts.num_params, opts.lower_bound);
@@ -429,14 +434,12 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                 opt.set_ftol_rel(opts.tol);
                 opt.set_maxeval(opts.maxiter);
                 opt.set_max_objective(llh_Xvecchia_batch, &data); // Pass a pointer to the data structure
-
                 // Set the initial guess from lower bound
                 // std::vector<T> localtheta_initial = {0.481, 0.10434, 0.500};
                 std::vector<T> localtheta_initial(opts.num_params, opts.lower_bound);
                 // Optimize the log likelihood
                 T maxf;
                 nlopt::result result = opt.optimize(localtheta_initial, maxf);
-                
                 double max_llh = opt.last_optimum_value();
                 int num_iterations = opt.get_numevals();
 
