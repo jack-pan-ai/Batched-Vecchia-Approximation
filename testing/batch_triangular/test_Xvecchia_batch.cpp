@@ -115,7 +115,7 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     int lddacon, lddccon;
     // used for the store the memory of offsets for mu and sigma
     T *d_A_offset[ngpu], *d_mu_offset[ngpu];
-    T *d_C_copy[ngpu];
+    // T *d_C_copy[ngpu];
 
     // time 
     double whole_time = 0;
@@ -202,7 +202,7 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                     fprintf(stderr, "error: vecchia is invalid; ensure 0 <= vecchia_num <= M.\n");
                     exit(1);
                 }
-                else if (opts.vecchia_num == 0)
+                else if (opts.vecchia_num == M)
                 {
                     ldacon = ldccon = Acon = Ccon = M;
                 }
@@ -248,7 +248,7 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                         TESTING_MALLOC_DEV(d_mu_offset[g], T, lddc * Cn * batchCount_gpu);
                         TESTING_MALLOC_DEV(d_A_offset[g], T, ldda * An * batchCount_gpu);
                         // extra memory for mu, in order to deal with the boundary value
-                        TESTING_MALLOC_DEV(d_C_copy[g], T, lddc * Cn * batchCount_gpu);
+                        // TESTING_MALLOC_DEV(d_C_copy[g], T, lddc * Cn * batchCount_gpu);
                         // TESTING_MALLOC_DEV(d_mu[g], T, lddc * Cn * batchCount_gpu);
                         // TESTING_MALLOC_DEV(d_mu_copy[g], T, lddc * Cn * batchCount_gpu);
                     }
@@ -270,30 +270,30 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                 }
 
                 
-                createLogFileParams(opts.num_loc, M, opts.zvecs, opts.p);
+                createLogFileParams(opts.num_loc, M, opts.zvecs, opts.p, opts.vecchia_num);
                 /* 
                 Dataset: defined by yourself 
                 */
                 // Uniform random generation for locations / read locations from disk
                 // random generate with seed as 1
-                locations = GenerateXYLoc(batchCount * lda / opts.p, 1);
+                // locations = GenerateXYLoc(batchCount * lda / opts.p, 1);
                 // Xrand_matrix(Cm, Cn * batchCount, h_C, ldc);
-                for(int i = 0; i < Cm * batchCount; i++) h_C[i] = 1.;
+                // for(int i = 0; i < Cm * batchCount; i++) h_C[i] = 1.;
                 // printLocations(opts.num_loc, locations);
                 // for(int i = 0; i < Cm * batchCount; i++) printf("%ith %lf \n",i, h_C[i]);
                 // univariate case
                 // synthetic dataset (umcomment it if used)
-                // std::string xy_path = "./data/synthetic_ds/LOC_" + std::to_string(opts.num_loc) + "_univariate_matern_stationary_" \
-                //             + std::to_string(opts.zvecs);
-                // std::string z_path = "./data/synthetic_ds/Z1_" + std::to_string(opts.num_loc) + "_univariate_matern_stationary_" \
-                //             + std::to_string(opts.zvecs);
+                std::string xy_path = "./data/synthetic_ds/LOC_" + std::to_string(opts.num_loc) + "_univariate_matern_stationary_" \
+                            + std::to_string(opts.zvecs);
+                std::string z_path = "./data/synthetic_ds/Z1_" + std::to_string(opts.num_loc) + "_univariate_matern_stationary_" \
+                            + std::to_string(opts.zvecs);
                 // std::string xy_path = "./data/synthetic_ds/LOC_" + std::to_string(opts.num_loc) \
-                //             + std::to_string(opts.zvecs);
-                // std::string z_path = "./data/synthetic_ds/Z1_" + std::to_string(opts.num_loc) \
-                //             + std::to_string(opts.zvecs);
-                // locations = loadXYcsv(xy_path, int(opts.num_loc/opts.p)); 
-                // loadObscsv<T>(z_path, int(opts.num_loc/opts.p), h_C);
-                // data.distance_metric = 0;
+                //             + "_" + std::to_string(opts.zvecs);
+                // std::string z_path = "./data/synthetic_ds/Z_" + std::to_string(opts.num_loc) \
+                //             + "_" + std::to_string(opts.zvecs);
+                locations = loadXYcsv(xy_path, int(opts.num_loc/opts.p)); 
+                loadObscsv<T>(z_path, int(opts.num_loc/opts.p), h_C);
+                data.distance_metric = 0;
                 //// real dataset soil (umcomment it if used)
                 // std::string xy_path = "./data/soil_moisture/R" + std::to_string(opts.zvecs) + \
                 //                         "/METAinfo";
@@ -416,7 +416,7 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                     data.d_C_conditioned[i] = d_C_conditioned[i];
                     data.d_A_offset[i] = d_A_offset[i];
                     data.d_mu_offset[i] = d_mu_offset[i];
-                    data.d_C_copy[i] = d_C_copy[i];
+                    // data.d_C_copy[i] = d_C_copy[i];
                     data.devices[i] = opts.devices[i];
                 }
 
@@ -447,7 +447,7 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                 whole_time = end_whole.tv_sec - start_whole.tv_sec + (end_whole.tv_nsec - start_whole.tv_nsec) / 1e9;
                 saveLogFileSum(num_iterations, localtheta_initial, 
                                 max_llh, /* whole_time */data.vecchia_time_total, 
-                                M, opts.num_loc, opts.zvecs);
+                                M, opts.num_loc, opts.zvecs, opts.vecchia_num);
                 // int num_evals = 0;
                 // num_evals = opt.get_numevals();
                 printf("Done! \n");

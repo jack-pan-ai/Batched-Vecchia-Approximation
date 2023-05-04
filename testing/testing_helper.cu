@@ -30,6 +30,8 @@
 #include <sys/time.h>
 #include <stdarg.h>
 
+#include <cmath>
+
 #include "testing_helper.h"
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1159,13 +1161,13 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
     else if ( strcmp("--cuda",  argv[i]) == 0  ) { opts->cuda = 1;  }
     else if ( strcmp("--magma",  argv[i]) == 0  ) { opts->magma = 1;  }
     else if ( strcmp("--strided",  argv[i]) == 0 || strcmp("-s",  argv[i]) == 0 ) { opts->strided = 1;  }
-    else if ( (strcmp("--tolerance", argv[i]) == 0 || strcmp("--tol", argv[i]) == 0) && i+1 < argc ) {
-      int tol = atoi( argv[++i] );
-      if (tol != 0)
-        opts->tolerance = pow(10, tol);
-      else
-        opts->tolerance = 0;
-    }
+    // else if ( (strcmp("--tolerance", argv[i]) == 0 || strcmp("--tol", argv[i]) == 0) && i+1 < argc ) {
+    //   int tol = atoi( argv[++i] );
+    //   if (tol != 0)
+    //     opts->tolerance = pow(10, tol);
+    //   else
+    //     opts->tolerance = 0;
+    // }
     else if ( strcmp("--svd",      argv[i]) == 0 && i+1 < argc ) {
       opts->svd = atoi( argv[++i] );
       kblas_assert( opts->svd >= SVD_Jacobi && opts->svd <= SVD_aca,
@@ -1247,13 +1249,20 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
 
     // used for vecchia conditioned
     else if ( strcmp("--test", argv[i]) == 0 ) { opts->test  = 1;    }
-    else if ( strcmp("--vecchia", argv[i]) == 0 ) { opts->vecchia  = 1;    }
+    else if ( strcmp("--vecchia", argv[i]) == 0 ) {
+       opts->vecchia  = 1; 
+       opts->vecchia_num=opts->msize[0];
+      }
     else if ( (strcmp("--vecchia_num",   argv[i]) == 0) && i+1 < argc ) {
       i++;
       int num;
       info = sscanf( argv[i], "%d", &num);
-      if( info == 1 ){
+      if( info == 1 && num > 0 ){
         opts->vecchia_num = num;
+        opts->vecchia = 1;
+      }else if(info == 1 && num == 0){
+        opts->vecchia_num = 0;
+        opts->vecchia = 0;
       }else{
         fprintf( stderr, "error: --vecchia_num %s is invalid; ensure only one number and 0 <= vecchia_num <= M.\n", argv[i]);
         exit(1);
@@ -1273,10 +1282,10 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
     }
     else if ( (strcmp("--tol",   argv[i]) == 0) && i+1 < argc ) {
       i++;
-      double tol;
-      info = sscanf( argv[i], "%lf", &tol);
+      int tol;
+      info = sscanf( argv[i], "%d", &tol);
       if( info == 1 && tol > 0 ){
-        opts->tol = tol;
+        opts->tol = pow(10, -tol);
       }else{
         fprintf( stderr, "error: --tol %s is invalid; ensure tol > 0.\n", argv[i]);
         exit(1);

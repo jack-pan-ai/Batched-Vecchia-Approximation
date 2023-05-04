@@ -65,17 +65,18 @@ void loadObscsv(const std::string& filename, int n, T* obs)
 template <class T>
 void saveLogFileParams(int iter, const double* theta, T llh,
                         T time_llh, T time_Xcmg, int num_loc, 
-                        int batchsize, int zvecs, int p)
+                        int batchsize, int zvecs, int p, int vecchia_num)
 {
     // zvecs is the zvecs th replicate
-    std::string filepath = "./data/batchsize_" + std::to_string(batchsize) \
-                            +"/params_" + std::to_string(num_loc) + '_' \
-                            + std::to_string(batchsize) + '_' + std::to_string(zvecs) + ".csv";
+    std::string filename = "./data/batchsize_" + std::to_string(batchsize) \
+                        + "_" + std::to_string(vecchia_num) \
+                        +"/params_" + std::to_string(num_loc) + '_' \
+                        + std::to_string(batchsize) + '_' + std::to_string(zvecs) + ".csv";
     // Open the log file in append mode
-    std::ofstream file(filepath, std::ios::app); // open file in append mode
+    std::ofstream file(filename, std::ios::app); // open file in append mode
     if (!file.is_open()) // check if file opened successfully
     {
-        std::cerr << "Unable to open file " << filepath << " for writing." << std::endl;
+        std::cerr << "Unable to open file " << filename << " for writing." << std::endl;
         return;
     }
     
@@ -89,12 +90,13 @@ void saveLogFileParams(int iter, const double* theta, T llh,
     file.close(); // close the file
 }
 
-void createLogFileParams(int num_loc, int batchsize, int zvecs, int p)
+void createLogFileParams(int num_loc, int batchsize, int zvecs, int p, int vecchia_num)
 {
     // zvecs is the zvecs th replicate
     std::string filename = "./data/batchsize_" + std::to_string(batchsize) \
-                            +"/params_" + std::to_string(num_loc) + '_' \
-                            + std::to_string(batchsize) + '_' + std::to_string(zvecs) + ".csv";
+                        + "_" + std::to_string(vecchia_num) \
+                        +"/params_" + std::to_string(num_loc) + '_' \
+                        + std::to_string(batchsize) + '_' + std::to_string(zvecs) + ".csv";
     std::ofstream file(filename, std::ios::app); // open file in append mode
     if (!file.is_open()) // check if file opened successfully
     {
@@ -119,12 +121,13 @@ void createLogFileParams(int num_loc, int batchsize, int zvecs, int p)
 
 template <class T>
 void saveLogFileSum(int iterations, std::vector<T> theta, T llk, 
-                    double time, int batchsize, int num_loc, int zvecs) {
+                    double time, int batchsize, int num_loc, 
+                    int zvecs, int vecchia_num) {
     // zvecs is the zvecs th replicate
     std::string filename = "./data/batchsize_" + std::to_string(batchsize) \
-                            +"/sum_" + std::to_string(num_loc) + '_' \
-                            + std::to_string(batchsize) + '_' + std::to_string(zvecs) + ".csv";
-
+                        + "_" + std::to_string(vecchia_num) \
+                        + "/sum_" + std::to_string(num_loc) + '_' \
+                        + std::to_string(batchsize) + '_' + std::to_string(zvecs) + ".csv";
     // Print the log message to the log file using printf
     printf("Total Number of Iterations = %d \n", iterations);
     printf("Total Optimization Time = %lf secs \n", time);

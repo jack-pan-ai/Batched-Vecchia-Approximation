@@ -25,7 +25,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
         for (int i=0; i < data->batchCount; i++){
             data->locations_con[i]->x=&(data->locations->x[int(data->lda * i/data->p)]);
             data->locations_con[i]->y=&(data->locations->y[int(data->lda * i/data->p)]); // 
-            data->locations_con[i]->z = NULL;
+            data->locations_con[i]->z=NULL;
             // fprintf(stderr, "%d, \n", int(data->lda * i /data->p));
         }                   
         // fprintf(stderr, "asdasdsa\n");
@@ -62,6 +62,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
             printf("The other kernel function has been developed.");
             exit(0);
         }
+        // printLocations(4, loc_batch);
         // printf("The conditioning covariance matrix.\n");
         // printMatrixCPU(data->M, data->M, data->h_A + i * data->An * data->lda, data->lda, i);
         // exit(0);
@@ -221,25 +222,30 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
         for (int g = 0; g < data->ngpu; g++)
         {
             check_error(cudaSetDevice(data->devices[g]));
-            check_cublas_error(cublasSetMatrixAsync(data->Acon, data->Acon * data->batchCount_gpu, sizeof(T),
+            // the g ==0 and i =1, means that the first block is independent llh
+            // the g > 0 and i =0, means that the first block is dependent llh
+            if (g == 0){
+                check_cublas_error(cublasSetMatrixAsync(data->Acon, data->Acon * data->batchCount_gpu, sizeof(T),
                                                     data->h_A_copy + data->Acon * data->Acon * data->batchCount_gpu * g, data->ldacon,
                                                     data->d_A_copy[g], data->lddacon, kblasGetStream(*(data->kblas_handle[g]))));
+            }else{
+                check_cublas_error(cublasSetMatrixAsync(data->Acon, data->Acon * data->batchCount_gpu, sizeof(T),
+                                                    data->h_A_copy + data->Acon * data->Acon * data->batchCount_gpu * g - data->Acon * data->Acon,
+                                                    data->ldacon, 
+                                                    data->d_A_copy[g], data->lddacon, kblasGetStream(*(data->kblas_handle[g]))));
+            }
             check_cublas_error(cublasSetMatrixAsync(data->Acon, data->An * data->batchCount_gpu, sizeof(T),
-                                                    data->h_A_conditioned + data->Acon * data->An * data->batchCount_gpu * g, data->ldacon,
-                                                    data->d_A_conditioned[g], data->lddacon, kblasGetStream(*(data->kblas_handle[g]))));
+                                                        data->h_A_conditioned + data->Acon * data->An * data->batchCount_gpu * g, 
+                                                        data->ldacon, 
+                                                        data->d_A_conditioned[g], data->lddacon, kblasGetStream(*(data->kblas_handle[g]))));
             check_cublas_error(cublasSetMatrixAsync(data->Ccon, data->Cn * data->batchCount_gpu, sizeof(T),
-                                                    data->h_C_conditioned + data->Ccon * data->Cn * data->batchCount_gpu * g, data->ldccon,
+                                                    data->h_C_conditioned + data->Ccon * data->Cn * data->batchCount_gpu * g,
+                                                    data->ldccon, 
                                                     data->d_C_conditioned[g], data->lddccon, kblasGetStream(*(data->kblas_handle[g]))));
-            // check the device for offset, needed?  TODO test
-            // check_cublas_error(cublasSetMatrixAsync(data->Cm, data->Cn * data->batchCount_gpu, sizeof(T),
-            //                                         data->h_C_conditioned + data->Cm * data->Cn * data->batchCount_gpu * g, data->ldc,
-            //                                         data->d_mu_offset[g], data->lddc, kblasGetStream(*(data->kblas_handle[g]))));
-            check_cublas_error(cublasSetMatrixAsync(data->Am, data->An * data->batchCount_gpu, sizeof(T),
-                                                    data->h_A_copy + data->Am * data->An * data->batchCount_gpu * g, data->lda,
-                                                    data->d_A_offset[g], data->ldda, kblasGetStream(*(data->kblas_handle[g]))));
-            check_cublas_error(cublasSetMatrixAsync(data->Cm, data->Cn * data->batchCount_gpu, sizeof(T),
-                                                    data->h_C + data->Cm * data->Cn * data->batchCount_gpu * g, data->ldc,
-                                                    data->d_C_copy[g], data->lddc, kblasGetStream(*(data->kblas_handle[g]))));
+            // the offset acts in the way which like intermediate outputs because of gemm
+            check_cublas_error(cublasSetMatrixAsync(data->Acon, data->Acon * data->batchCount_gpu, sizeof(T),
+                                                        data->h_A_copy + data->Acon * data->Acon * data->batchCount_gpu * g, data->ldacon,
+                                                        data->d_A_offset[g], data->lddacon, kblasGetStream(*(data->kblas_handle[g]))));
             /*
             TODO
             if (!data->strided)
@@ -262,7 +268,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
             */
         }
 
-        // conditioned part 1.2, wsquery for potrf and trsm
+        // conditioned part 1.2, wsquery for potrf and trsm 
         for (int g = 0; g < data->ngpu; g++)
         {
             check_error(cudaSetDevice(data->devices[g]));
@@ -293,6 +299,17 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
         struct timespec start, end;
         clock_gettime(CLOCK_MONOTONIC, &start);
 
+        /*
+        For example,
+        p(y2 | y1)
+        \mu'_2 = \sigma_{12}^T  inv(\sigma_{11}) y_1
+        \sigma'_{22} = \sigma_{22} - \sigma_{12}^T  inv(\sigma_{11}) \sigma_{12}
+
+        d_C_conditioned: y_1
+        d_A_copy: \sigma_{11}
+        d_A_conditioned: \sigma_{12}
+        */
+
         for (int g = 0; g < data->ngpu; g++)
         {
             check_error(cudaSetDevice(data->devices[g]));
@@ -308,7 +325,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
             if (data->strided)
             {
                 check_kblas_error(kblas_potrf_batch(*(data->kblas_handle[g]),
-                                                    data->uplo, data->Am,
+                                                    data->uplo, data->Acon,
                                                     data->d_A_copy[g], data->lddacon, data->Acon * data->lddacon,
                                                     data->batchCount_gpu,
                                                     data->d_info[g]));
@@ -336,7 +353,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
             // for (int i = 0; i < data->batchCount_gpu; i++)
             // {
             //     printf("%dth", i);
-            //     printMatrixGPU(data->Am, data->An, data->d_A_copy[g] + i * data->Am * data->ldda, data->ldda);
+            //     // printMatrixGPU(data->Am, data->An, data->d_A_copy[g] + i * data->Am * data->ldda, data->ldda);
             //     printMatrixGPU(data->Am, data->An, data->d_A_conditioned[g] + i * data->Am * data->ldda, data->ldda);
             // }
             if (data->strided)
@@ -388,7 +405,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
             // printf("[info] Starting GEMM and GEMV. \n");
             if (data->strided)
             {
-                // \Sigma_offset^T %*% \Sigma_offset
+                // // \Sigma_offset^T %*% \Sigma_offset
                 // for (int i = 0; i < data->batchCount_gpu; i++)
                 // {
                 //     printf("%dth", i);
@@ -441,20 +458,103 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
             //     printf("%dth", i);
             //     printMatrixGPU(data->Am, data->An, data->d_A_offset[g] + i * data->Am * data->ldda, data->ldda);
             // }
+            /*
+            // the g ==0 and i =1, means that the first block is independent llh
+            // the g > 0 and i =0, means that the first block is dependent llh
+                in geam, the original value can be overwritten
+                 Cov22'<- Cov22 - Cov12^T inv(Cov11) Cov12
+                 Cov22: d_C
+                 Cov22': d_C
+                 Cov12^T inv(Cov11) Cov12: d_mu_offset
+            */
             if (data->strided)
-            {
-                for (int i = 1; i < data->batchCount_gpu; i++)
-                {   
-                    check_cublas_error(cublasXgeam(kblasGetCublasHandle(*(data->kblas_handle[g])),
-                                                    CUBLAS_OP_N, CUBLAS_OP_N,
-                                                    data->Am, data->An,
-                                                    &alpha_1, // 1
-                                                    data->d_A[g] + data->ldda * data->An * i, data->ldda, // !!!!!not sure if it's ok, in order to save memory !!!!
-                                                    &beta_n1, // -1
-                                                    data->d_A_offset[g] + data->ldda * data->An * i, data->ldda,
-                                                    data->d_A[g] + data->ldda * data->An * i, data->ldda)); // + data->ldda * data->An * i means the first one does not change
+            {   
+                if (g == 0){
+                    for (int i = 1; i < data->batchCount_gpu; i++)
+                    {   
+                        check_cublas_error(cublasXgeam(kblasGetCublasHandle(*(data->kblas_handle[g])),
+                                                        CUBLAS_OP_N, CUBLAS_OP_N,
+                                                        data->Am, data->An,
+                                                        &alpha_1, // 1
+                                                        data->d_A[g] + data->ldda * data->An * i, data->ldda, // !!!!!not sure if it's ok, in order to save memory !!!!
+                                                        &beta_n1, // -1
+                                                        data->d_A_offset[g] + data->ldda * data->An * i, data->ldda,
+                                                        data->d_A[g] + data->ldda * data->An * i, data->ldda)); // + data->ldda * data->An * i means the first one does not change
+                    }
+                }else{
+                    // for (int i = 0; i < data->batchCount_gpu; i++)
+                    // {
+                    //     printf("%dth", i);
+                    //     printMatrixGPU(data->Am, data->An, data->d_A[g] + i * data->Am * data->ldda, data->ldda);
+                    // }
+                    for (int i = 0; i < data->batchCount_gpu; i++)
+                    {   
+                        check_cublas_error(cublasXgeam(kblasGetCublasHandle(*(data->kblas_handle[g])),
+                                                        CUBLAS_OP_N, CUBLAS_OP_N,
+                                                        data->Am, data->An,
+                                                        &alpha_1, // 1
+                                                        data->d_A[g] + data->ldda * data->An * i, data->ldda, // !!!!!not sure if it's ok, in order to save memory !!!!
+                                                        &beta_n1, // -1
+                                                        data->d_A_offset[g] + data->ldda * data->An * i, data->ldda,
+                                                        data->d_A[g] + data->ldda * data->An * i, data->ldda)); // + data->ldda * data->An * i means the first one does not change
+                    }
                 }
             }
+            // the g ==0 and i =1, means that the first block is independent llh
+            // the g > 0 and i =0, means that the first block is dependent llh
+            /*
+                in geam, the original value can be overwritten
+                 y'<- y - mu
+                 y: d_C
+                 y': d_C
+                 mu: d_mu_offset
+            */
+            if (g == 0){
+                for (int i = 1; i < data->batchCount_gpu; i++)
+                {
+                    // printf("The results before TRSM \n");
+                    // printVecGPU(data->Cm, data->Cn, data->d_C[g], data->ldc, i);
+                    // printf("The results before TRSM \n");
+                    // printVecGPU(data->Cm, data->Cn, data->d_C[g]+ data->lddc * data->Cn * i, data->ldc, i);
+                    // printf("The results before TRSM \n");
+                    // printVecGPU(data->Cm, data->Cn, data->d_mu_offset[g]+ data->lddc * data->Cn * i, data->ldc, i);
+                    check_cublas_error(cublasXgeam(kblasGetCublasHandle(*(data->kblas_handle[g])),
+                                                    CUBLAS_OP_N, CUBLAS_OP_N,
+                                                    data->Cm, data->Cn,
+                                                    &alpha_1, // 1
+                                                    data->d_C[g] + data->lddc * data->Cn * i, data->lddc,
+                                                    &beta_n1, // -1
+                                                    data->d_mu_offset[g] + data->lddc * data->Cn * i, data->lddc,
+                                                    data->d_C[g] + data->lddc * data->Cn * i, data->lddc));
+                    // printf("The results before TRSM \n");
+                    // printVecGPU(data->Cm, data->Cn, data->d_C[g] + i * data->Cn * data->lddc, data->ldc, i);
+                }
+            }else {
+                for (int i = 0; i < data->batchCount_gpu; i++)
+                {
+                    // printf("The results before TRSM \n");
+                    // printVecGPU(data->Cm, data->Cn, data->d_C[g], data->ldc, i);
+                    // printf("The results before TRSM \n");
+                    // printVecGPU(data->Cm, data->Cn, data->d_C_copy[g]+ data->lddc * data->Cn * i, data->ldc, i);
+                    // printf("The results before TRSM \n");
+                    // printVecGPU(data->Cm, data->Cn, data->d_mu_offset[g]+ data->lddc * data->Cn * i, data->ldc, i);
+                    check_cublas_error(cublasXgeam(kblasGetCublasHandle(*(data->kblas_handle[g])),
+                                                    CUBLAS_OP_N, CUBLAS_OP_N,
+                                                    data->Cm, data->Cn,
+                                                    &alpha_1, // 1
+                                                    data->d_C[g] + data->lddc * data->Cn * i, data->lddc,
+                                                    &beta_n1, // -1
+                                                    data->d_mu_offset[g] + data->lddc * data->Cn * i, data->lddc,
+                                                    data->d_C[g] + data->lddc * data->Cn * i, data->lddc));
+                    // printf("The results before TRSM \n");
+                    // printVecGPU(data->Cm, data->Cn, data->d_C[g] + i * data->Cn * data->lddc, data->ldc, i);
+                }
+            }
+            // printf("The results before TRSM \n");
+            // printVecGPU(data->Cm, data->Cn, data->d_C[g] + data->Cn * data->lddc, data->ldc, 1);
+            // printf("The results before TRSM \n");
+            // printVecGPU(data->Cm, data->Cn, data->d_C[g], data->ldc, 0);
+
             // for (int i = 0; i < data->batchCount_gpu; i++)
             // {
             //     printf("%dth", i);
@@ -574,32 +674,6 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
         triangular solution: L Z_new <- Z_old
         */
         // printf("[info] Starting triangular solver. \n");
-        if (data->vecchia)
-        {
-            for (int i = 1; i < data->batchCount_gpu; i++)
-            {
-                // printf("The results before TRSM \n");
-                // printVecGPU(data->Cm, data->Cn, data->d_C[g], data->ldc, i);
-                // printf("The results before TRSM \n");
-                // printVecGPU(data->Cm, data->Cn, data->d_C_copy[g]+ data->lddc * data->Cn * i, data->ldc, i);
-                // printf("The results before TRSM \n");
-                // printVecGPU(data->Cm, data->Cn, data->d_mu_offset[g]+ data->lddc * data->Cn * i, data->ldc, i);
-                check_cublas_error(cublasXgeam(kblasGetCublasHandle(*(data->kblas_handle[g])),
-                                                CUBLAS_OP_N, CUBLAS_OP_N,
-                                                data->Cm, data->Cn,
-                                                &alpha_1, // 1
-                                                data->d_C_copy[g] + data->lddc * data->Cn * i, data->lddc,
-                                                &beta_n1, // -1
-                                                data->d_mu_offset[g] + data->lddc * data->Cn * i, data->lddc,
-                                                data->d_C[g] + data->lddc * data->Cn * i, data->lddc));
-                // printf("The results before TRSM \n");
-                // printVecGPU(data->Cm, data->Cn, data->d_C[g] + i * data->Cn * data->lddc, data->ldc, i);
-            }
-            // printf("The results before TRSM \n");
-            // printVecGPU(data->Cm, data->Cn, data->d_C[g] + data->Cn * data->lddc, data->ldc, 1);
-            // printf("The results before TRSM \n");
-            // printVecGPU(data->Cm, data->Cn, data->d_C[g], data->ldc, 0);
-        }
         // printf("The results before TRSM.");
         // printMatrixGPU(data->M, data->M, data->d_A[0] + data->An * data->ldda, data->ldda);
         // for(int i=0; i<data->batchCount_gpu; i++){
@@ -713,7 +787,8 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
                     localtheta, llk, 
                     indep_time + vecchia_time, dcmg_time, 
                     data->num_loc, data->M,
-                    data->zvecs, data->p); // this is log_tags for write a file
+                    data->zvecs, data->p,
+                    data->vecchia_num); // this is log_tags for write a file
     if (data->kernel ==1){
         printf("%dth Model Parameters (Variance, range, smoothness): (%lf, %lf, %lf) -> Loglik: %lf \n", 
             data->iterations, localtheta[0], localtheta[1], localtheta[2], llk); 

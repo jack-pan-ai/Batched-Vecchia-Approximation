@@ -1032,7 +1032,7 @@ void core_dcmg(double* A, int m, int n,
 		j0 = 0;
 		for (j = 0; j < n; j++) {
 			expr = calculateDistance(l1, l2, i0, j0, distance_metric, 0) / localtheta[1];
-			expr /= 100.; /*comment it for synthetic dataset*/
+			// expr /= 100.; /*comment it for synthetic dataset*/
 			// printf("%lf \n", expr);
 			if (expr == 0)
 				A[i + j * m] = sigma_square /*+ 1e-4*/;
