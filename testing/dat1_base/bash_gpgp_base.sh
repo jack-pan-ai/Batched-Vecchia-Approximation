@@ -9,11 +9,9 @@ for ra in "${range[@]}"
 do
     for al in "${alpha[@]}"
     do
-        mv "./data_1k_${ra}_${al}_bv" "../data"
+        cd "./data_1k_${ra}_${al}_gpgp"
+        Rscript ./train_helper_1k_base.R
         cd ..
-        bash ./data/run_script.sh
-        mv "./data" "./dat1_bv_dependent/data_1k_${ra}_${al}_bv"
-        cd ./dat1_bv_dependent
     done
 done
 

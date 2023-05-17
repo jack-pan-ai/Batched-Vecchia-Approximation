@@ -27,17 +27,16 @@ for (i in 1:n_replicates) {
                header=FALSE)
   y = as.matrix(y)
   n = length(y)
-  X<-as.matrix(rep(1,n)) 
   
   #run 
   for(nn in c(2, 5, 10, 20, 40)){
       timing<-system.time({
         ot<-capture.output(
-        fit<-fit_model(y,locs, X, "matern_isotropic", max_iter=2000, 
+        fit<-fit_model_meanzero(y,locs, "matern_isotropic", max_iter=2000, 
                    fixed_parms=c(4), start_parms=c(0.01, 0.01, 0.01, 0),
                    NNarray = array_gpgp(n, nn),
                    group=FALSE, m_seq=c(nn), 
-                   reorder=True, convtol = 1e-09)
+                   reorder=TRUE, convtol = 1e-09)
       )
     })
     n_ot = length(ot)
