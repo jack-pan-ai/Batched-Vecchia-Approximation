@@ -2,9 +2,13 @@ obj/
 bin/
 .vscode/
 lib/libkblas-gpu.a
-test_cublas
-test_cublas.cpp
-testing/test.sh
-testing/data/batchsize_*/
-testing/data/outputs_sum/
-testing/data/synthetic_*/
+test
+test.cpp
+
+#ignore files in testing
+testing/bin/
+testing/data
+testing/dat1_bv*/
+testing/dat1_gpgp*/
+testing/data_perf/
+testing/extras/

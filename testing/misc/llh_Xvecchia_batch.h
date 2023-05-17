@@ -275,7 +275,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
             if (data->strided)
             {
                 kblas_potrf_batch_strided_wsquery(*(data->kblas_handle[g]), data->Acon, data->batchCount_gpu);
-                kblas_trsm_batch_strided_wsquery(*(data->kblas_handle[g]), data->side, data->Acon, data->N, data->batchCount_gpu);
+                kblas_trsm_batch_strided_wsquery(*(data->kblas_handle[g]), 'L', data->Acon, data->N, data->batchCount_gpu);
                 kblas_gemm_batch_strided_wsquery(*(data->kblas_handle[g]), data->batchCount);
             }
             else
@@ -288,7 +288,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
             else
             {
                 kblas_potrf_batch_wsquery(*(data->kblas_handle[g]), data->M, data->batchCount_gpu);
-                kblas_trsm_batch_wsquery(*(data->kblas_handle[g]), data->side, data->M, data->N, data->batchCount_gpu);
+                kblas_trsm_batch_wsquery(*(data->kblas_handle[g]), 'L', data->M, data->N, data->batchCount_gpu);
             }
             */
             check_kblas_error(kblasAllocateWorkspace(*(data->kblas_handle[g])));
@@ -325,7 +325,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
             if (data->strided)
             {
                 check_kblas_error(kblas_potrf_batch(*(data->kblas_handle[g]),
-                                                    data->uplo, data->Acon,
+                                                    'L', data->Acon,
                                                     data->d_A_copy[g], data->lddacon, data->Acon * data->lddacon,
                                                     data->batchCount_gpu,
                                                     data->d_info[g]));
@@ -334,7 +334,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
             else
             {
                 check_kblas_error(kblas_potrf_batch(*(data->kblas_handle[g]),
-                                                    data->uplo, data->Am,
+                                                    'L', data->Am,
                                                     d_A_array[g], data->ldda,
                                                     data->batchCount_gpu,
                                                     data->d_info[g]));
@@ -359,14 +359,14 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
             if (data->strided)
             {
                 check_kblas_error(kblasXtrsm_batch_strided(*(data->kblas_handle[g]),
-                                                            data->side, data->uplo, KBLAS_NoTrans, data->diag,
+                                                            'L', 'L', 'N', data->diag,
                                                             data->lddacon, data->An,
                                                             1.,
                                                             data->d_A_copy[g], data->lddacon, data->Acon * data->lddacon, // A <- L
                                                             data->d_A_conditioned[g], data->lddacon, data->An * data->lddacon,
                                                             data->batchCount_gpu)); //data->d_A_conditioned <- 
                 check_kblas_error(kblasXtrsm_batch_strided(*(data->kblas_handle[g]),
-                                                            data->side, data->uplo, KBLAS_NoTrans, data->diag,
+                                                            'L', 'L', 'N', data->diag,
                                                             data->lddccon, data->Cn,
                                                             1.,
                                                             data->d_A_copy[g], data->lddacon, data->Acon * data->lddacon, // A <- L
@@ -390,7 +390,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
                                         data->d_C_array[g], data->lddc,
                                         data->batchCount_gpu));
                 // check_kblas_error(kblasXtrsm_batch(*(data->kblas_handle[g]),
-                //                                    data->side, data->uplo, data->transA, data->diag,
+                //                                    'L', 'L', 'N', data->diag,
                 //                                    data->M, data->N,
                 //                                    1., (const T **)(d_A_array[g]), data->ldda,
                 //                                    data->d_C_array[g], data->lddc,
@@ -412,7 +412,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
                 //     printMatrixGPU(data->Am, data->An, data->d_A_conditioned[g] + i * data->Acon * data->lddacon, data->lddacon);
                 // }
                 check_kblas_error(kblas_gemm_batch(*(data->kblas_handle[g]),
-                                                    KBLAS_Trans, KBLAS_NoTrans,
+                                                    KBLAS_Trans, 'N',
                                                     data->Am, data->An, data->Acon,
                                                     1.,
                                                     data->d_A_conditioned[g], data->lddacon, data->An * data->lddacon,
@@ -427,7 +427,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
                 // } 
                 // \Sigma_offset^T %*% z_offset
                 check_kblas_error(kblas_gemm_batch(*(data->kblas_handle[g]),
-                                                    KBLAS_Trans, KBLAS_NoTrans,
+                                                    KBLAS_Trans, 'N',
                                                     data->Am, data->Cn, data->Acon,
                                                     1.,
                                                     data->d_A_conditioned[g], data->lddacon, data->An * data->lddacon,
@@ -592,7 +592,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
         if (data->strided)
         {
             kblas_potrf_batch_strided_wsquery(*(data->kblas_handle[g]), data->M, data->batchCount_gpu);
-            kblas_trsm_batch_strided_wsquery(*(data->kblas_handle[g]), data->side, data->M, data->N, data->batchCount_gpu);
+            kblas_trsm_batch_strided_wsquery(*(data->kblas_handle[g]), 'L', data->M, data->N, data->batchCount_gpu);
         }
         /* TODO
         else if (data->nonUniform)
@@ -600,7 +600,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
         else
         {
             kblas_potrf_batch_wsquery(*(data->kblas_handle[g]), data->M, data->batchCount_gpu);
-            kblas_trsm_batch_wsquery(*(data->kblas_handle[g]), data->side, data->M, data->N, data->batchCount_gpu);
+            kblas_trsm_batch_wsquery(*(data->kblas_handle[g]), 'L', data->M, data->N, data->batchCount_gpu);
         }
         */
         check_kblas_error(kblasAllocateWorkspace(*(data->kblas_handle[g])));
@@ -625,7 +625,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
         if (data->strided)
         {
             check_kblas_error(kblas_potrf_batch(*(data->kblas_handle[g]),
-                                                data->uplo, data->Am,
+                                                'L', data->Am,
                                                 data->d_A[g], data->ldda, data->An * data->ldda,
                                                 data->batchCount_gpu,
                                                 data->d_info[g]));
@@ -634,7 +634,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
         else
         {
             check_kblas_error(kblas_potrf_batch(*(data->kblas_handle[g]),
-                                                data->uplo, data->Am,
+                                                'L', data->Am,
                                                 d_A_array[g], data->ldda,
                                                 data->batchCount_gpu,
                                                 data->d_info[g]));
@@ -687,7 +687,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
         if (data->strided)
         {
             check_kblas_error(kblasXtrsm_batch_strided(*(data->kblas_handle[g]),
-                                                        data->side, data->uplo, data->transA, data->diag,
+                                                        'L', 'L', 'N', data->diag,
                                                         data->An, data->Cn,
                                                         1.,
                                                         data->d_A[g], data->ldda, data->An * data->ldda,
@@ -709,7 +709,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
                                     data->d_C_array[g], data->lddc,
                                     data->batchCount_gpu));
             // check_kblas_error(kblasXtrsm_batch(*(data->kblas_handle[g]),
-            //                                    data->side, data->uplo, data->transA, data->diag,
+            //                                    'L', 'L', 'N', data->diag,
             //                                    data->M, data->N,
             //                                    1., (const T **)(d_A_array[g]), data->ldda,
             //                                    data->d_C_array[g], data->lddc,

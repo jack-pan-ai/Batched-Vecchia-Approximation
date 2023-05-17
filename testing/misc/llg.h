@@ -34,15 +34,6 @@ cublasStatus_t cublasXdot(cublasHandle_t handle, int n,
   return cublasZdotc(handle, n, x, incx, y, incy, result);
 }
 
-#define FMULS_GEVV(m_) ((m_) * (m_))
-#define FADDS_GEVV(m_) ((m_) * (m_))
-
-template <class T>
-double FLOPS_GEVV(int m)
-{
-  return (is_complex(T) ? 6. : 1.) * FMULS_GEVV((double)(m)) + (is_complex(T) ? 2. : 1.) * FADDS_GEVV((double)(m));
-}
-
 /*
 determinant for log(det(A)) = log(det(L)det(L^T))
 strided version
@@ -210,3 +201,10 @@ void printVecGPU(int Cm, int Cn, T *d_C, int lda, int i)
   free(h_C);
 }
 
+template<class T>
+void Xrand_matrix(long rows, long cols, T* A, long LDA)
+{
+	long i;
+  long size_a = cols * LDA;
+  for(i = 0; i < size_a; i++) A[i] = ( (T)rand() ) / (T)RAND_MAX;
+}

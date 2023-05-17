@@ -60,41 +60,19 @@ LIB+= -lstdc++
 
 KBLAS_LIB=../lib/lib${LIB_KBLAS_NAME}.a
 
-C_SRC=
-INC_SRC=testing_utils.h testing_Xtr_common.h testing_helper.h ckernel.h
+INC_SRC=ckernel.h
 
 OBJ_DIR=./obj
-# C_OBJ =
-
 BIN_DIR=./bin
 
-#$(info $$_SUPPORT_BLAS2_ is [${_SUPPORT_BLAS2_}])
-ifdef _SUPPORT_BLAS2_
-KBLAS_TEST2_DIR=blas_l2
-include $(KBLAS_TEST2_DIR)/Makefile
-endif
-
-#$(info $$_SUPPORT_BLAS3_ is [${_SUPPORT_BLAS3_}])
-ifdef _SUPPORT_BLAS3_
-KBLAS_TEST3_DIR=blas_l3
-include $(KBLAS_TEST3_DIR)/Makefile
-endif
 
 #$(info $$_SUPPORT_BATCH_TR_ is [${_SUPPORT_BATCH_TR_}])
 ifdef _SUPPORT_BATCH_TR_
-KBLAS_BATCH_DIR=batch_triangular
+KBLAS_BATCH_DIR=src
 include $(KBLAS_BATCH_DIR)/Makefile
 endif
 
-ifdef _SUPPORT_TLR_
-	KBLAS_TLR_DIR=blas_tlr
-	include $(KBLAS_TLR_DIR)/Makefile
-endif
-
-# C_OBJ= $(patsubst %.c,$(OBJ_DIR)/%.o,$(C_SRC))
-# EXE= $(patsubst %.c,$(BIN_DIR)/%,$(C_SRC))
-
-all: $(EXE_L2) $(EXE_L3) $(EXE_BATCH) $(EXE_TLR)
+all: $(EXE_BATCH)
 
 $(OBJ_DIR)/testing_helper.o: testing_helper.cu
 	$(NVCC) $(NVOPTS) $(NVOPTS_3) $(INCLUDES) $(NVCCFLAGS) -c $< -o $@
@@ -102,17 +80,8 @@ $(OBJ_DIR)/testing_helper.o: testing_helper.cu
 $(OBJ_DIR)/ckernel.o: ckernel.cpp
 	$(CXX) $(COPTS) $(INCLUDES) -c $< -o $@
 
-$(EXE_TLR): $(BIN_DIR)/%: $(OBJ_DIR)/%.o $(KBLAS_LIB) $(OBJ_DIR)/testing_helper.o
-	$(CC) $(COPTS) $(OBJ_DIR)/testing_helper.o $< -o $@ $(LIB_PATH) $(LIB)
-
 $(EXE_BATCH): $(BIN_DIR)/%: $(OBJ_DIR)/%.o $(KBLAS_LIB) $(OBJ_DIR)/testing_helper.o $(OBJ_DIR)/ckernel.o
 	$(CC) $(COPTS) $(OBJ_DIR)/testing_helper.o $(OBJ_DIR)/ckernel.o $< -o $@ $(LIB_PATH) $(LIB)
 
-$(EXE_L2): $(BIN_DIR)/%: $(OBJ_DIR)/%.o $(KBLAS_LIB)
-	$(CC) $(COPTS) $< -o $@ $(LIB_PATH) $(LIB)
-
-$(EXE_L3): $(BIN_DIR)/%: $(OBJ_DIR)/%.o $(KBLAS_LIB)
-	$(CC) $(COPTS) $< -o $@ $(LIB_PATH) $(LIB)
-
 clean:
-	rm -f $(OBJ_DIR)/*.o $(EXE_L2) $(EXE_L3) $(EXE_BATCH) $(EXE_TLR)
+	rm -f $(OBJ_DIR)/*.o $(EXE_BATCH)

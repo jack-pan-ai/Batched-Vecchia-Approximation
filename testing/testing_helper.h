@@ -54,7 +54,7 @@ int kblas_roundup(int x, int y);
 ////////////////////////////////////////////////////////////
 // Error checking
 ////////////////////////////////////////////////////////////
-#define check_error(ans) { gpuAssert((ans), __FILE__, __LINE__); }
+// #define check_error(ans) { gpuAssert((ans), __FILE__, __LINE__); }
 void gpuAssert(cudaError_t code, const char *file, int line);
 
 #define check_cublas_error(ans) { gpuCublasAssert((ans), __FILE__, __LINE__); }
@@ -203,41 +203,23 @@ typedef struct kblas_opts
 	int devices[MAX_NGPUS];
 	int nstream;
 	int ngpu;
-	int niter;
-	int nruns;
 	double      tolerance;
-	int check;
-	int verbose;
-	int nb;
-	int db;
-	int custom;
-	int warmup;
 	int time;
-	int lapack;
-	int magma;
-	int svd;
-	int cuda;
 	int nonUniform;
-	//int bd[KBLAS_BACKDOORS];
 	int batchCount;
 	int strided;
-	int btest, batch[MAX_NTEST];
-	int rtest, rank[MAX_NTEST];
+	int batch[MAX_NTEST];
 	int omp_numthreads;
-  char LR;//Low rank format
-  int version;
-
-	// lapack flags
-	char uplo;
-	char transA;
-	char transB;
-	char side;
-	char diag;
-
+  
   // local theta for kernel in GPs
   double sigma;
   double beta;
   double nu;
+  double sigma1;
+  double sigma2;
+  double alpha;
+  double nu1;
+  double nu2;
 
   // vecchia
   int vecchia;
@@ -259,9 +241,9 @@ typedef struct kblas_opts
   // bivariate
   int p;
   
-} kblas_opts;
+} vecchia_opts;
 
-int parse_opts(int argc, char** argv, kblas_opts *opts);
+int parse_opts(int argc, char** argv, vecchia_opts *opts);
 
 #ifdef __cplusplus
 }
