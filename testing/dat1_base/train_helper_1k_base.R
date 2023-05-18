@@ -34,7 +34,7 @@ for (i in 1:n_replicates) {
         ot<-capture.output(
         fit<-fit_model_meanzero(y,locs, "matern_isotropic", max_iter=2000, 
                    fixed_parms=c(4), start_parms=c(0.01, 0.01, 0.01, 0),
-                   NNarray = array_gpgp(n, nn),
+                   NNarray = array_gpgp(n, nn), # comment it if your like to use knn
                    group=TRUE, m_seq=c(nn), 
                    reorder=TRUE, convtol = 1e-09)
       )

@@ -9,9 +9,11 @@ for ra in "${range[@]}"
 do
     for al in "${alpha[@]}"
     do
+        echo "[INFO] ./data_1k_${ra}_${al}_gpgp is starting now!"
         cd "./data_1k_${ra}_${al}_gpgp"
         Rscript ./train_helper_1k_base.R
         cd ..
+        echo "[INFO] ./data_1k_${ra}_${al}_gpgp is done!"
     done
 done
 
