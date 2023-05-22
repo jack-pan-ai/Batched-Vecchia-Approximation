@@ -221,6 +221,9 @@ typedef struct kblas_opts
   double nu1;
   double nu2;
 
+  // performance test
+  int perf;
+
   // vecchia
   int vecchia;
   int vecchia_num;

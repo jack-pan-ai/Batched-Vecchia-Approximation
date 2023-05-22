@@ -12,3 +12,6 @@ testing/dat1_bv*/
 testing/dat1_gpgp*/
 testing/data_perf/
 testing/extras/
+
+# dataset
+testing/dat1_base_40k/synData/*

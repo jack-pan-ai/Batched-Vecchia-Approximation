@@ -179,6 +179,9 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
   opts->nu1     = 0.;
   opts->nu2     = 0.;
   opts->beta     = 0.;
+  
+  // performance test
+  opts->perf = 0;
 
   // vecchia conditioned
   opts->vecchia =0; 
@@ -349,6 +352,11 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
         "error: --omp_numthreads %s is invalid; ensure omp_numthreads >= 1.\n", argv[i] );
     }
     else if ( strcmp("--strided",  argv[i]) == 0 || strcmp("-s",  argv[i]) == 0 ) { opts->strided = 1;  }
+    // used for performance test
+    else if ( strcmp("--perf", argv[i]) == 0 ) {
+       opts->perf  = 1; 
+       opts->maxiter = 1;
+      }
     // used for vecchia conditioned
     else if ( strcmp("--test", argv[i]) == 0 ) { opts->test  = 1;    }
     else if ( strcmp("--vecchia", argv[i]) == 0 ) {

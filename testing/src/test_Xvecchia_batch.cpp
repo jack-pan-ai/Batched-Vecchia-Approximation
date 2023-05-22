@@ -221,17 +221,34 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     */
     // Uniform random generation for locations / read locations from disk
     // random generate with seed as 1
-    // locations = GenerateXYLoc(batchCount * lda / opts.p, 1);
-    // Xrand_matrix(Cm, Cn * batchCount, h_C, ldc);
-    // for(int i = 0; i < Cm * batchCount; i++) h_C[i] = 1.;
-    // printLocations(opts.num_loc, locations);
-    // for(int i = 0; i < Cm * batchCount; i++) printf("%ith %lf \n",i, h_C[i]);
-    // univariate case
-    // synthetic dataset (umcomment it if used)
-    std::string xy_path = "./data/synthetic_ds/LOC_" + std::to_string(opts.num_loc) + "_univariate_matern_stationary_" \
-                + std::to_string(opts.zvecs);
-    std::string z_path = "./data/synthetic_ds/Z1_" + std::to_string(opts.num_loc) + "_univariate_matern_stationary_" \
-                + std::to_string(opts.zvecs);
+    if (opts.perf == 1){
+        locations = GenerateXYLoc(batchCount * lda / opts.p, 1);
+        for(int i = 0; i < Cm * batchCount; i++) h_C[i] = 1.;
+        // Xrand_matrix(Cm, Cn * batchCount, h_C, ldc);
+        // printLocations(opts.num_loc, locations);
+        // for(int i = 0; i < Cm * batchCount; i++) printf("%ith %lf \n",i, h_C[i]);
+    }else{
+        // univariate case
+        // synthetic dataset (umcomment it if used)
+        if (opts.p == 1){
+            std::string xy_path = "./data/synthetic_ds/LOC_" + std::to_string(opts.num_loc) + "_univariate_matern_stationary_" \
+                    + std::to_string(opts.zvecs);
+            std::string z_path = "./data/synthetic_ds/Z1_" + std::to_string(opts.num_loc) + "_univariate_matern_stationary_" \
+                        + std::to_string(opts.zvecs);
+            locations = loadXYcsv(xy_path, int(opts.num_loc/opts.p)); 
+            loadObscsv<T>(z_path, int(opts.num_loc/opts.p), h_C);
+        }
+        if (opts.p == 2){
+            // you have to preprocess the data
+            std::string xy_path = "./data/synthetic_ds/LOC_" + std::to_string(int(opts.num_loc/opts.p)) + \
+                                "_bivariate_matern_parsimonious_" + std::to_string(opts.zvecs);
+            std::string z_path = "./data/synthetic_ds/Z_" + std::to_string(int(opts.num_loc/opts.p)) + \
+                                    "_bivariate_matern_parsimonious_" + std::to_string(opts.zvecs);
+            locations = loadXYcsv(xy_path, int(opts.num_loc/opts.p)); 
+            loadObscsv<T>(z_path, int(opts.num_loc/opts.p), h_C);
+        }
+        data.distance_metric = 0;
+    }
     // std::string xy_path = "./data/synthetic_ds/LOC_" + std::to_string(opts.num_loc) \
     //             + "_" + std::to_string(opts.zvecs);
     // std::string z_path = "./data/synthetic_ds/Z_" + std::to_string(opts.num_loc) \
@@ -245,15 +262,6 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     // locations = loadXYcsv(xy_path, opts.num_loc); 
     // loadObscsv<T>(z_path, opts.num_loc, h_C);
 
-    // // bivaraite case (umcomment it if used)
-    // std::string xy_path = "./data/synthetic_ds/LOC_" + std::to_string(int(opts.num_loc/opts.p)) + \
-    //                         "_bivariate_matern_parsimonious_" + std::to_string(opts.zvecs);
-    // std::string z_path = "./data/synthetic_ds/Z_" + std::to_string(int(opts.num_loc/opts.p)) + \
-    //                         "_bivariate_matern_parsimonious_" + std::to_string(opts.zvecs);
-
-    locations = loadXYcsv(xy_path, int(opts.num_loc/opts.p)); 
-    loadObscsv<T>(z_path, int(opts.num_loc/opts.p), h_C);
-    data.distance_metric = 0;
     /*
     Dataset: defined by yourself 
     */
