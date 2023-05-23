@@ -12,8 +12,8 @@ do
         mv "./data_40k_${ra}_${al}_bv" "../data"
         cd ..
         bash ./data/run_script.sh
-        mv "./data" "./dat1_bv_dependent/data_40k_${ra}_${al}_bv"
-        cd ./dat1_bv_dependent
+        mv "./data" "./dat1_bv_dependent_morton/data_40k_${ra}_${al}_bv"
+        cd ./dat1_bv_dependent_morton
     done
 done
 

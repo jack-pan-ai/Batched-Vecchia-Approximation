@@ -22,6 +22,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
         // TESTING_MALLOC_CPU(data->locations_copy->y, double, data->batchCount * data->lda);
         // memcpy(data->locations_copy->x, data->locations->x, data->batchCount * data->lda * sizeof(double));
         // memcpy(data->locations_copy->y, data->locations->y, data->batchCount * data->lda * sizeof(double));
+        #pragma omp parallel for
         for (int i=0; i < data->batchCount; i++){
             data->locations_con[i]->x=&(data->locations->x[int(data->lda * i/data->p)]);
             data->locations_con[i]->y=&(data->locations->y[int(data->lda * i/data->p)]); // 
@@ -178,6 +179,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
         // printf("[info] The vecchia offset is starting now!\n");
         // /* conditioned part, \sigma_{12} inv (\sigma_{22}) \sigma_{21} and \mu
         // this part is removable in the real data 
+        #pragma omp parallel for
         for (int i = 0; i < data->batchCount; i++)
         {   
             // pair with conditioned covariance matrix
@@ -722,7 +724,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
         */
         // printf("[info] Starting dot product. \n");
         if (data->strided)
-        {
+        {   
             for (int i = 0; i < data->batchCount_gpu; i++)
             {
                 // printVecGPU(data->Cm, data->Cn, data->d_C[g] + i * data->Cn * data->lddc, data->ldc, i);
