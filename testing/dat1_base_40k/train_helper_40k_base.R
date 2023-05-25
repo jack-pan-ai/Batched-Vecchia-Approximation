@@ -19,6 +19,7 @@ array_gpgp = function (n, m)
   return(NNarray)
 }
 
+
 for (i in 1:n_replicates) {
   locs = read.csv(paste0('./synthetic_ds/LOC_', n,'_univariate_matern_stationary_', i),
                   header=FALSE)
@@ -29,14 +30,19 @@ for (i in 1:n_replicates) {
   n = length(y)
   
   #run 
-  for(nn in c(20, 40, 60, 80)){
+  for(nn in c(10, 20, 40, 80)){
+    if (nn > 10){
+      m_seq = c(10, nn)
+    }else{
+      m_seq = c(nn)
+    }
       timing<-system.time({
         ot<-capture.output(
-        fit<-fit_model_meanzero(y,locs, "matern_isotropic", max_iter=4000, 
+        fit<-fit_model_meanzero(y,locs, "matern_isotropic", max_iter=1000, 
                    fixed_parms=c(4), start_parms=c(0.01, 0.01, 0.01, 0),
                   #  NNarray = array_gpgp(n, nn), # comment it if your like to use knn and this would impact the parallel computing to some cases!!!
-                   group=TRUE, m_seq=c(10, nn), 
-                   reorder=TRUE, convtol = 1e-09)
+                   group=TRUE, m_seq=m_seq, 
+                   reorder=TRUE, convtol = 1e-05)
       )
     })
     n_ot = length(ot)

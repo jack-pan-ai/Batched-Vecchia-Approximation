@@ -34,11 +34,8 @@
 #undef USE_MKL
 #endif
 
+// KBLAS helper
 #include "testing_helper.h"
-
-#include "Xhelper_funcs.ch"  // TODO: need Xset_pointer_2 from this
-// #include "kblas_operators.h" // TODO: this has templates and C++ host/device functions (make_one and make_zero)
-// #include "kblas_common.h"    // TODO: this has templates and C++ host/device functions
 #include "Xblas_core.ch"
 
 // Used for llh
@@ -48,7 +45,6 @@
 extern "C" {
     #include "misc/vecchia_helper_c.h"
 }
-
 // this is not formal statement and clarification, only for convenience
 #include "misc/utils.h"
 #include "misc/llh_Xvecchia_batch.h"
