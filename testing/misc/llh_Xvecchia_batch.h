@@ -151,6 +151,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
         check_cublas_error(cublasSetMatrixAsync(data->Cm, data->Cn * data->batchCount_gpu, sizeof(T),
                                                 data->h_C + data->Cm * data->Cn * data->batchCount_gpu * g, data->ldc,
                                                 data->d_C[g], data->lddc, kblasGetStream(*(data->kblas_handle[g]))));
+        check_error(cudaDeviceSynchronize());
         // check_cublas_error(cublasSetMatrixAsync(data->Cm, data->Cn * data->batchCount_gpu, sizeof(T),
         //                                         h_mu + data->Cm * data->Cn * data->batchCount_gpu * g, data->ldc,
         //                                         d_mu[g], data->lddc, kblasGetStream(*(data->kblas_handle[g]))));
@@ -278,7 +279,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
             {
                 kblas_potrf_batch_strided_wsquery(*(data->kblas_handle[g]), data->Acon, data->batchCount_gpu);
                 kblas_trsm_batch_strided_wsquery(*(data->kblas_handle[g]), 'L', data->Acon, data->N, data->batchCount_gpu);
-                kblas_gemm_batch_strided_wsquery(*(data->kblas_handle[g]), data->batchCount);
+                kblas_gemm_batch_strided_wsquery(*(data->kblas_handle[g]), data->batchCount_gpu);
             }
             else
             {

@@ -369,8 +369,10 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
 
     struct timespec start_whole, end_whole;
     clock_gettime(CLOCK_MONOTONIC, &start_whole);
+
     // Set up the optimization problem
     nlopt::opt opt(nlopt::LN_BOBYQA, opts.num_params); // Use the BOBYQA algorithm in 2 dimensions
+    // std::vector<T> lb(opts.num_params, opts.lower_bound);
     std::vector<T> lb(opts.num_params, opts.lower_bound);
     std::vector<T> ub(opts.num_params, opts.upper_bound); 
     if (opts.kernel == 2){ // bivariate matern kernel 
@@ -382,18 +384,30 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     opt.set_maxeval(opts.maxiter);
     opt.set_max_objective(llh_Xvecchia_batch, &data); // Pass a pointer to the data structure
     // Set the initial guess from lower bound
-    // std::vector<T> localtheta_initial = {0.481, 0.10434, 0.500};
+    // std::vector<T> localtheta_initial = {1.5, 0.017526, 2.3};
+    // 0.759382, 0.044264, 2.31848
+    // std::vector<T> localtheta_initial = {0.1};
     std::vector<T> localtheta_initial(opts.num_params, opts.lower_bound);
     // Optimize the log likelihood
     T maxf;
-    nlopt::result result = opt.optimize(localtheta_initial, maxf);
+    
+    try {
+        // Cautious for future develop
+        // Perform the optimization
+        nlopt::result result = opt.optimize(localtheta_initial, maxf);
+    } catch (const std::exception& e) {
+        // Handle any other exceptions that may occur during optimization
+        std::cerr << "Exception caught: " << e.what() << std::endl;
+        // ...
+    }
+
     double max_llh = opt.last_optimum_value();
     int num_iterations = opt.get_numevals();
 
     clock_gettime(CLOCK_MONOTONIC, &end_whole);
     whole_time = end_whole.tv_sec - start_whole.tv_sec + (end_whole.tv_nsec - start_whole.tv_nsec) / 1e9;
     saveLogFileSum(num_iterations, localtheta_initial, 
-                    max_llh, whole_time/* data.vecchia_time_total*/, 
+                    max_llh, /*whole_time*/ data.vecchia_time_total, 
                     M, opts.num_loc, opts.zvecs, opts.vecchia_num);
     // int num_evals = 0;
     // num_evals = opt.get_numevals();
