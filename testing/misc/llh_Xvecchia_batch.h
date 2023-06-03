@@ -52,7 +52,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
 
 
     // 5 parts generations 
-    // #pragma omp parallel for
+    #pragma omp parallel for
     for (int i=0; i < data->batchCount; i++)
     {
         // printf("x_copy is %lf \n",data->locations_copy->x[0]);
