@@ -743,8 +743,8 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
             T llk_temp = 0;
             llk_temp = -(data->dot_result_h[g][k] + data->logdet_result_h[g][k] + data->Am * log(2 * PI)) * 0.5;
             llk += llk_temp;
-            printf("%dth log determinant is % lf\n", k, data->logdet_result_h[g][k]);
-            printf("%dth dot product is % lf\n", k, data->dot_result_h[g][k]);
+            // printf("%dth log determinant is % lf\n", k, data->logdet_result_h[g][k]);
+            // printf("%dth dot product is % lf\n", k, data->dot_result_h[g][k]);
             // printf("%dth pi is % lf\n", k, data->Am * log(2 * PI));
             // printf("%dth log likelihood is % lf\n", k, llk_temp);
             // printf("-------------------------------------\n");

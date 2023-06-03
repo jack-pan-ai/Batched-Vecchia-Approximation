@@ -290,7 +290,7 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
         memcpy(locations_con->x, locations->x, sizeof(double) * ldccon);
         memcpy(locations_con->y, locations->y, sizeof(double) * ldccon);
         if (opts.knn){
-            #pragma omp parallel for
+            // #pragma omp parallel for
             for (int i = 1; i < batchCount; i++){
                 // how many previous points you would like to include in your nearest neighbor searching
                 int con_loc = std::max(i * Cm - 100 * Cm, 0);
@@ -304,7 +304,6 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
             }
         }
     }
-
     // // true parameter
     // TESTING_MALLOC_CPU(localtheta, T, opts.num_params); // no nugget effect
     // localtheta[0] = opts.sigma;

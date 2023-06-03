@@ -3,6 +3,7 @@
  - 0.0 copy this file and rename the folder
  - - dat1_bv_dependent_morton
  - - dat1_bv_independent_morton
+ - - dat1_bv_dependent_morton_knn
  - - dat1_gpgp_knn_group_morton
  - - dat1_gpgp_knn_group_minmax
 
