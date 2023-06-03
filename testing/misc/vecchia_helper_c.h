@@ -6,6 +6,7 @@
 #define NGPU_MAX_NUM 99
 #define BATCHCOUNT_MAX 99999999
 
+
 typedef struct llh_data {
     bool strided;
     int ngpu;
@@ -34,8 +35,8 @@ typedef struct llh_data {
     int *d_info[NGPU_MAX_NUM];
     location *locations;
     location *locations_con_boundary;
-    // location* locations_con;
-    location* locations_con[BATCHCOUNT_MAX];
+    location* locations_con;
+    // location* locations_con[BATCHCOUNT_MAX];
     location* locations_copy;
     // no nugget
     double *localtheta;

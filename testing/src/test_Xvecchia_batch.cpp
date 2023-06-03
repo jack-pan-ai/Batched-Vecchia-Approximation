@@ -45,6 +45,8 @@
 extern "C" {
     #include "misc/vecchia_helper_c.h"
 }
+// used for nearest neighbor 
+#include "misc/nearest_neighbor.h"
 // this is not formal statement and clarification, only for convenience
 #include "misc/utils.h"
 #include "misc/llh_Xvecchia_batch.h"
@@ -81,9 +83,8 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     //  potrf used
     int *d_info[ngpu];
     location *locations;
-    // location *locations_copy;
-    location *locations_con_boundary;
-    location *locations_con[opts.batchCount];
+    location *locations_con;
+    // location *locations_con[opts.batchCount];
     // // no nugget
     // T *localtheta;
     // T *localtheta_initial;
@@ -270,14 +271,40 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     // printLocations(opts.num_loc, locations);
     // printLocations(batchCount * lda, locations);
     if (opts.vecchia){
+        // Following can be deleted with adding nearest neighbors
         // init for each iteration (necessary but low efficient)
         // locations_copy = (location*) malloc(sizeof(location));
         // data.locations_copy = locations_copy;
-        for (int i=0; i < batchCount; i ++){
-            locations_con[i] = (location*) malloc(sizeof(location));
-            data.locations_con[i] = locations_con[i];
-        }                
+        // for (int i=0; i < batchCount; i ++){
+        //     locations_con[i] = (location*) malloc(sizeof(location));
+        //     data.locations_con[i] = locations_con[i];
+        // }               
+        locations_con = (location*) malloc(sizeof(location));
+        locations_con->x = (T* ) malloc(int(opts.num_loc/opts.p) * sizeof(double));
+        locations_con->y = (T* ) malloc(int(opts.num_loc/opts.p) * sizeof(double));
+        locations_con->z = NULL;
+        data.locations_con = locations_con;
+        // this does not matter, just some random number to make the matrix postive definite
+        // the first block makes no sense to the vecchia, just for the consistancy in batch computation
+        memcpy(h_C_conditioned, h_C, sizeof(T) * ldccon * Cn);
+        memcpy(locations_con->x, locations->x, sizeof(double) * ldccon);
+        memcpy(locations_con->y, locations->y, sizeof(double) * ldccon);
+        if (opts.knn){
+            #pragma omp parallel for
+            for (int i = 1; i < batchCount; i++){
+                // how many previous points you would like to include in your nearest neighbor searching
+                int con_loc = std::max(i * Cm - 100 * Cm, 0);
+                findNearestPoints(h_C_conditioned, h_C, locations_con, locations, con_loc , i * Cm, (i + 1) * Cm, Cm);
+            }
+        }else{
+            for (int i = Cm; i < (int(opts.num_loc/opts.p)); i++){
+                locations_con->x[i] = locations->x[i - Cm];
+                locations_con->y[i] = locations->y[i - Cm];
+                h_C_conditioned[i] = h_C[i - Cm];
+            }
+        }
     }
+
     // // true parameter
     // TESTING_MALLOC_CPU(localtheta, T, opts.num_params); // no nugget effect
     // localtheta[0] = opts.sigma;
@@ -317,7 +344,6 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     // // no nugget
     // data.localtheta = localtheta;
     data.locations = locations;
-    data.locations_con_boundary = locations_con_boundary;
     // vecchia offset
     data.h_A_copy = h_A_copy;
     data.h_A_conditioned = h_A_conditioned;
@@ -417,12 +443,16 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     cudaFreeHost(h_A_copy);
     cudaFreeHost(h_A_conditioned);
     cudaFreeHost(h_C_conditioned);
+    cudaFreeHost(locations->x);
+    cudaFreeHost(locations->y);
     if (opts.vecchia){
         // init for each iteration (necessary but low efficient)
         // cudaFreeHost(locations_copy);
-        for (int i=0; i < batchCount; i ++){
-            cudaFreeHost(locations_con[i]);
-        }                    
+        // for (int i=0; i < batchCount; i ++){
+        //     cudaFreeHost(locations_con[i]);
+        // }
+        cudaFreeHost(locations_con->x);
+        cudaFreeHost(locations_con->y);
     }
     for (int g = 0; g < ngpu; g++)
     {

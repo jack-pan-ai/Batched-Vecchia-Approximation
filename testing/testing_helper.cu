@@ -206,6 +206,9 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
   // bivariate 
   opts->p = 1; // univaraite
 
+  // k nearest neighbors
+  opts->knn = 0;
+
   int ndevices;
   cudaGetDeviceCount( &ndevices );
   int info;
@@ -458,6 +461,10 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
         fprintf( stderr, "Your dataset does not contain the replicate more than 50!");
         exit(1);
       }
+    }
+    // k nearest neighbors
+    else if ( strcmp("--knn", argv[i]) == 0 ) {
+      opts->knn  = 1; 
     }
     // ture parameters
     else if ( strcmp("--ikernel", argv[i]) == 0 && i+1 < argc ) {

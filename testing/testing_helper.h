@@ -244,6 +244,8 @@ typedef struct kblas_opts
   // bivariate
   int p;
   
+  // k nearest neighbors
+  int knn;
 } vecchia_opts;
 
 int parse_opts(int argc, char** argv, vecchia_opts *opts);

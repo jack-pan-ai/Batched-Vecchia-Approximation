@@ -1,3 +1,6 @@
+#ifndef LLG_H
+#define LLG_H
+
 #include <cmath>
 
 /*
@@ -208,3 +211,5 @@ void Xrand_matrix(long rows, long cols, T* A, long LDA)
   long size_a = cols * LDA;
   for(i = 0; i < size_a; i++) A[i] = ( (T)rand() ) / (T)RAND_MAX;
 }
+
+#endif
