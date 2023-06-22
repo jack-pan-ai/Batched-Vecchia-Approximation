@@ -15,3 +15,6 @@ testing/extras/
 
 # dataset
 testing/dat1_base_40k/synData/*
+
+#base
+testing/dat1_base_6k/

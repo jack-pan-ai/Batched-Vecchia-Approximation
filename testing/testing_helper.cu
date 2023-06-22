@@ -209,6 +209,9 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
   // k nearest neighbors
   opts->knn = 0;
 
+  // random ordering
+  opts->randomordering = 0;
+
   int ndevices;
   cudaGetDeviceCount( &ndevices );
   int info;
@@ -465,6 +468,10 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
     // k nearest neighbors
     else if ( strcmp("--knn", argv[i]) == 0 ) {
       opts->knn  = 1; 
+    }
+    // ordering 
+    else if ( strcmp("--randomordering", argv[i]) == 0 ) {
+      opts->randomordering  = 1; 
     }
     // ture parameters
     else if ( strcmp("--ikernel", argv[i]) == 0 && i+1 < argc ) {

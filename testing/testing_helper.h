@@ -246,6 +246,9 @@ typedef struct kblas_opts
   
   // k nearest neighbors
   int knn;
+
+  // ordering
+  int randomordering;
 } vecchia_opts;
 
 int parse_opts(int argc, char** argv, vecchia_opts *opts);

@@ -244,6 +244,9 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
             locations = loadXYcsv(xy_path, int(opts.num_loc/opts.p)); 
             loadObscsv<T>(z_path, int(opts.num_loc/opts.p), h_C);
         }
+        if (opts.randomordering == 1){
+            random_locations(int(opts.num_loc/opts.p), locations);
+        }
         data.distance_metric = 0;
     }
     // std::string xy_path = "./data/synthetic_ds/LOC_" + std::to_string(opts.num_loc) \

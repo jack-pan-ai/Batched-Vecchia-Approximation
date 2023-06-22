@@ -130,6 +130,27 @@ static void zsort_locations(int n, location *locations)
     }
 }
 
+// random ordering
+void random_locations(int size, location* loc) {
+    int your_seed_value = 42; // Set your desired seed value
+
+    srand(your_seed_value);
+
+    for (int i = size - 1; i > 0; i--) {
+        int j = rand() % (i + 1);
+
+        // Swap x values
+        double tempX = loc->x[i];
+        loc->x[i] = loc->x[j];
+        loc->x[j] = tempX;
+
+        // Swap y values
+        double tempY = loc->y[i];
+        loc->y[i] = loc->y[j];
+        loc->y[j] = tempY;
+    }
+}
+
 //Generate the covariance matrix.
 void core_scmg(float *A, int m, int n,
                int m0, int n0,
