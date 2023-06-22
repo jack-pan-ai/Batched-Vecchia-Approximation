@@ -131,7 +131,7 @@ static void zsort_locations(int n, location *locations)
 }
 
 // random ordering
-void random_locations(int size, location* loc) {
+static void random_locations(int size, location* loc) {
     int your_seed_value = 42; // Set your desired seed value
 
     srand(your_seed_value);
