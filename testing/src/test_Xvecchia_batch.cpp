@@ -245,7 +245,7 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
             loadObscsv<T>(z_path, int(opts.num_loc/opts.p), h_C);
         }
         if (opts.randomordering == 1){
-            random_locations(int(opts.num_loc/opts.p), locations);
+            random_locations(int(opts.num_loc/opts.p), locations, h_C);
         }
         data.distance_metric = 0;
     }
