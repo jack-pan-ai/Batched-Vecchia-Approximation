@@ -283,8 +283,10 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
         //     data.locations_con[i] = locations_con[i];
         // }               
         locations_con = (location*) malloc(sizeof(location));
-        locations_con->x = (T* ) malloc(int(opts.num_loc/opts.p) * sizeof(double));
-        locations_con->y = (T* ) malloc(int(opts.num_loc/opts.p) * sizeof(double));
+        // locations_con->x = (T* ) malloc(int(opts.num_loc/opts.p) * sizeof(double));
+        // locations_con->y = (T* ) malloc(int(opts.num_loc/opts.p) * sizeof(double));
+        locations_con->x = (T* ) malloc(batchCount * opts.vecchia_num / opts.p * sizeof(double));
+        locations_con->y = (T* ) malloc(batchCount * opts.vecchia_num / opts.p * sizeof(double));
         locations_con->z = NULL;
         data.locations_con = locations_con;
         // this does not matter, just some random number to make the matrix postive definite
@@ -296,14 +298,17 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
             // #pragma omp parallel for
             for (int i = 1; i < batchCount; i++){
                 // how many previous points you would like to include in your nearest neighbor searching
-                int con_loc = std::max(i * Cm - 100 * Cm, 0);
-                findNearestPoints(h_C_conditioned, h_C, locations_con, locations, con_loc , i * Cm, (i + 1) * Cm, Cm);
+                int con_loc = std::max(i * Cm - 1000 * Cm, 0);
+                findNearestPoints(h_C_conditioned, h_C, locations_con, locations, con_loc , i * opts.vecchia_num, (i + 1) * Cm, opts.vecchia_num);
             }
         }else{
-            for (int i = Cm; i < (int(opts.num_loc/opts.p)); i++){
-                locations_con->x[i] = locations->x[i - Cm];
-                locations_con->y[i] = locations->y[i - Cm];
-                h_C_conditioned[i] = h_C[i - Cm];
+            // #pragma omp parallel for
+            for (int i = 1; i < batchCount; i++){
+                for (int j = 0; j < opts.vecchia_num; j++){
+                    locations_con->x[i * opts.vecchia_num + j] = locations->x[i * M - opts.vecchia_num + j];
+                    locations_con->y[i * opts.vecchia_num + j] = locations->y[i * M - opts.vecchia_num + j];
+                    h_C_conditioned[i * opts.vecchia_num + j] = h_C[i * M - opts.vecchia_num + j];
+                }
             }
         }
     }
@@ -410,6 +415,7 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     opt.set_upper_bounds(ub);
     opt.set_ftol_rel(opts.tol);
     opt.set_maxeval(opts.maxiter);
+    // opt.set_maxeval(1);
     opt.set_max_objective(llh_Xvecchia_batch, &data); // Pass a pointer to the data structure
     // Set the initial guess from lower bound
     // std::vector<T> localtheta_initial = {1.5, 0.017526, 2.3};

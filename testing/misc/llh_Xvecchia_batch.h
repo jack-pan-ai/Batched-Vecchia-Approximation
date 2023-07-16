@@ -88,8 +88,8 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
             location* loc_batch_con= (location *) malloc(sizeof (location));
             // TESTING_MALLOC_CPU(loc_batch->x, double, data->lda); 
             // TESTING_MALLOC_CPU(loc_batch->y, double, data->lda); 
-            loc_batch_con->x=&(data->locations_con->x[int (i * data->lda / data->p)]);
-            loc_batch_con->y=&(data->locations_con->y[int (i * data->lda / data->p)]);
+            loc_batch_con->x=&(data->locations_con->x[int (i * data->vecchia_num / data->p)]);
+            loc_batch_con->y=&(data->locations_con->y[int (i * data->vecchia_num / data->p)]);
             loc_batch_con->z= NULL;
             // data->locations_con[i-1]->x += (data->Am - data->Acon);
             // data->locations_con[i-1]->y += (data->Am - data->Acon);
@@ -100,8 +100,8 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
             // }
             if (data->kernel == 1){
                 // *h_A_copy: \sigma_{22}
-                core_dcmg(data->h_A_copy + i * data->An * data->ldacon,
-                            data->ldacon, data->An,
+                core_dcmg(data->h_A_copy + i * data->Acon * data->ldacon,
+                            data->ldacon, data->Acon,
                             loc_batch_con,
                             loc_batch_con, localtheta, data->distance_metric);
                 // *h_A_conditioned: \sigma_{12}
@@ -111,8 +111,8 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
                             loc_batch, localtheta, data->distance_metric);
             }else if (data->kernel == 2){
                 // *h_A_copy: \sigma_{22}
-                core_dcmg_bivariate_parsimonious(data->h_A_copy + i * data->An * data->ldacon,
-                                                data->ldacon, data->An,
+                core_dcmg_bivariate_parsimonious(data->h_A_copy + i * data->Acon * data->ldacon,
+                                                data->ldacon, data->Acon,
                                                 loc_batch_con,
                                                 loc_batch_con, localtheta, data->distance_metric);
                 // *h_A_conditioned: \sigma_{12}
@@ -128,7 +128,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
             //matrix size: data->lda by data->An
             // printf("The conditioned covariance matrix.\n");
             // printMatrixCPU(data->M, data->M, data->h_A_conditioned + i * data->An * data->lda, data->lda, i);
-            // printMatrixCPU(data->M, data->M, data->h_A_copy + i * data->An * data->lda, data->lda, i);
+            // printMatrixCPU(data->M, data->M, data->h_A_copy + i * data->Acon * data->ldacon, data->ldacon, i);
         }
 
         // obeservation initialization
