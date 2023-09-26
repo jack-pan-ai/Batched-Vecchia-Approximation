@@ -251,8 +251,11 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
         {
             check_error(cudaSetDevice(data->devices[g]));
             if (data->strided)
-            {
-                kblas_potrf_batch_strided_wsquery(*(data->kblas_handle[g]), data->Acon, data->batchCount_gpu);
+            {   
+                // data->Acon*2 instead of data->Acon is because for some cases, 
+                // like 320/20 combination, 320 batchszie 20 batch count, cannot 
+                // be allocated enough memory. But the reason is unclear now.
+                kblas_potrf_batch_strided_wsquery(*(data->kblas_handle[g]), data->Acon*2, data->batchCount_gpu);
                 kblas_trsm_batch_strided_wsquery(*(data->kblas_handle[g]), 'L', data->Acon, data->N, data->batchCount_gpu);
                 kblas_gemm_batch_strided_wsquery(*(data->kblas_handle[g]), data->batchCount_gpu);
             }

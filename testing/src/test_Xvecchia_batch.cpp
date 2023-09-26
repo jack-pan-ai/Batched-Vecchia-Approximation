@@ -220,7 +220,7 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     // random generate with seed as 1
     if (opts.perf == 1){
         locations = GenerateXYLoc(batchCount * lda / opts.p, 1);
-        for(int i = 0; i < Cm * batchCount; i++) h_C[i] = 1.;
+        for(int i = 0; i < Cm * batchCount; i++) h_C[i] = 0.;
         // Xrand_matrix(Cm, Cn * batchCount, h_C, ldc);
         // printLocations(opts.num_loc, locations);
         // for(int i = 0; i < Cm * batchCount; i++) printf("%ith %lf \n",i, h_C[i]);
@@ -418,10 +418,10 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     // opt.set_maxeval(1);
     opt.set_max_objective(llh_Xvecchia_batch, &data); // Pass a pointer to the data structure
     // Set the initial guess from lower bound
-    // std::vector<T> localtheta_initial = {1.5, 0.017526, 2.3};
+    // std::vector<T> localtheta_initial = {1.0, 0.1, 0.5};
+    std::vector<T> localtheta_initial(opts.num_params, opts.lower_bound);
     // 0.759382, 0.044264, 2.31848
     // std::vector<T> localtheta_initial = {0.1};
-    std::vector<T> localtheta_initial(opts.num_params, opts.lower_bound);
     // Optimize the log likelihood
     T maxf;
     
@@ -441,7 +441,7 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     clock_gettime(CLOCK_MONOTONIC, &end_whole);
     whole_time = end_whole.tv_sec - start_whole.tv_sec + (end_whole.tv_nsec - start_whole.tv_nsec) / 1e9;
     saveLogFileSum(num_iterations, localtheta_initial, 
-                    max_llh, /*whole_time*/ data.vecchia_time_total, 
+                    max_llh, whole_time/* data.vecchia_time_total*/, 
                     M, opts.num_loc, opts.zvecs, opts.vecchia_num);
     // int num_evals = 0;
     // num_evals = opt.get_numevals();
