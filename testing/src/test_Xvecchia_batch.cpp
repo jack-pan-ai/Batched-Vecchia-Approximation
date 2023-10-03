@@ -61,12 +61,23 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     bool strided = opts.strided;
     int ngpu = opts.ngpu;
     int nonUniform = opts.nonUniform;
+    
+    int batchCount;
 
     // int nruns = opts.nruns;
+    // BLAS language, 
+    // A* stands for the covariance matrix 
+    // C* stands for the observations
     int M, N;
     int Am, An, Cm, Cn;
     int lda, ldc, ldda, lddc;
     int ISEED[4] = {0, 0, 0, 1};
+    // vecchia language
+    // bs: block size; cs: conditioning size
+    // size_first: the first block size
+    int bs, cs; 
+    int size_first;
+    
     // TBD for non uniform
     // int max_M, max_N;
     // int *h_M, *h_N,
@@ -80,22 +91,30 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     // int *d_ldda[ngpu], *d_lddc[ngpu];
     T *dot_result_h[ngpu];
     T *logdet_result_h[ngpu];
+    T *logdet_result_h_first[ngpu];
+    T *dot_result_h_first[ngpu];
     //  potrf used
     int *d_info[ngpu];
     location *locations;
     location *locations_con;
-    // location *locations_con[opts.batchCount];
+    
     // // no nugget
+    std::vector<T> localtheta_initial;
     // T *localtheta;
     // T *localtheta_initial;
     T *grad; // used for future gradient based optimization, please do not comment it
 
     // vecchia offset
-    T *h_A_copy, *h_A_conditioned, *h_C_conditioned;
-    T *d_A_copy[ngpu], *d_A_conditioned[ngpu], *d_C_conditioned[ngpu];
+    T *h_A_conditioning, *h_A_cross, *h_C_conditioning; 
+    T *d_A_conditioning[ngpu], *d_A_cross[ngpu], *d_C_conditioning[ngpu];
+    // vecchia first block 
+    T *h_A_first, *h_C_first; 
+    T *d_A_first[ngpu], *d_C_first[ngpu]; 
     int ldacon, ldccon, Acon, Ccon;
     int lddacon, lddccon;
+    int ldda_first, lddc_first;
     // used for the store the memory of offsets for mu and sigma
+    // or, you could say that this is correction term
     T *d_A_offset[ngpu], *d_mu_offset[ngpu];
     // T *d_C_copy[ngpu];
 
@@ -115,9 +134,6 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
         kblasCreate(&kblas_handle[g]);
     }
 
-    int batchCount = opts.batchCount; 
-    int batchCount_gpu = batchCount / ngpu;
-
     // /*
     // seed for location generation
     // */
@@ -134,40 +150,64 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
 
     fflush(stdout);
 
+    // Vecchia config
     lda = Am = M;
     An = M;
     ldc = Cm = M;
     Cn = N;
+    bs = M;
+    cs = ldacon = ldccon = Acon = Ccon = opts.vecchia_cs;
 
-    // the number of conditioned points
-    if (opts.vecchia_num > M)
-    {
-        fprintf(stderr, "error: vecchia is invalid; ensure 0 <= vecchia_num <= M.\n");
-        exit(1);
+    // the batchCount is choosen to the largest
+    if (bs > cs){
+        batchCount = opts.num_loc / bs;
+    }else{
+        batchCount = (opts.num_loc - cs) / bs;
     }
-    else if (opts.vecchia_num == M)
-    {
-        ldacon = ldccon = Acon = Ccon = M;
+    if (batchCount % ngpu != 0){
+        fprintf(stderr, "Your data cannot be assigned to each gpu equally, the varying ngpu will be developed later.\n");
+        exit(0);
     }
-    else
-    {
-        ldacon = ldccon = Acon = Ccon = opts.vecchia_num;
+    int batchCount_gpu = batchCount / ngpu;
+    // The size of the first block 
+    size_first = opts.num_loc  - bs*batchCount;
+    // some conditions for bs, bc, cs
+    if (bs * batchCount > opts.num_loc){
+        fprintf(stderr, "Your batch size * --batchCount > num_loc, please choose proper bs and bc! \n");
+        exit(0);
     }
+    if (batchCount <= 0){
+        fprintf(stderr, "batchCount must be postive!\n");
+        exit(0);
+    }
+    // if (opts.vecchia){
+    //     if (!(cs <= size_first && size_first <= 2*cs)){
+    //         fprintf(stderr, "(bs, bc, cs) = (%d, %d, %d)\n", bs, batchCount, cs);
+    //         fprintf(stderr, "The balance between block size and batchCount is not reasonable, and it has to be within m in (cs, 2*cs), m = N - bs*bc, cs: conditioning size.\n");
+    //         exit(0);
+    //     }
+    // }
+
+    // Vecchia config for strided access
+    ldda_first = ((size_first + 31) / 32) * 32;
+    lddc_first = ((size_first + 31) / 32) * 32;
+    ldda = ((lda + 31) / 32) * 32;
+    lddc = ((ldc + 31) / 32) * 32;
     lddccon = ((ldccon + 31) / 32) * 32;
     lddacon = lddccon;
 
-    ldda = ((lda + 31) / 32) * 32;
-    lddc = ((ldc + 31) / 32) * 32;
-    // used for batched llh
-    TESTING_MALLOC_PIN(h_A, T, lda * An * batchCount);
-    TESTING_MALLOC_PIN(h_C, T, ldc * Cn * batchCount);
+    // batched log-likelihood
+    TESTING_MALLOC_PIN(h_A_first, T, size_first * size_first);
+    TESTING_MALLOC_PIN(h_C_first, T, size_first * Cn);
+    TESTING_MALLOC_PIN(h_A, T, lda * An * batchCount); 
+    // extra memory is needed for later change of h_C = h_c + data->size_first
+    TESTING_MALLOC_PIN(h_C, T, ldc * Cn * batchCount + size_first * Cn); 
     if (opts.vecchia)
     {
         // used for vecchia offset
-        // the first batch is no conditioned, but we still need the extra memeory for bound cases
-        TESTING_MALLOC_PIN(h_A_copy, T, ldacon * Acon * batchCount);
-        TESTING_MALLOC_PIN(h_A_conditioned, T, ldacon * An * batchCount);
-        TESTING_MALLOC_PIN(h_C_conditioned, T, ldccon * Cn * batchCount);
+        TESTING_MALLOC_PIN(h_A_conditioning, T, ldacon * Acon * batchCount);
+        TESTING_MALLOC_PIN(h_A_cross, T, ldacon * An * batchCount);
+        TESTING_MALLOC_PIN(h_C_conditioning, T, ldccon * Cn * batchCount);
         // extra memory for mu
         // TESTING_MALLOC_PIN(h_mu, T, ldc * Cn * batchCount);
     }
@@ -177,16 +217,21 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
         check_error(cudaSetDevice(opts.devices[g]));
         TESTING_MALLOC_DEV(d_A[g], T, ldda * An * batchCount_gpu);
         TESTING_MALLOC_DEV(d_C[g], T, lddc * Cn * batchCount_gpu);
+        if (g==0){
+            TESTING_MALLOC_DEV(d_A_first[0], T, ldda_first * size_first);
+            TESTING_MALLOC_DEV(d_C_first[0], T, lddc_first * Cn);
+            TESTING_MALLOC_CPU(logdet_result_h_first[0], T, 1);
+            TESTING_MALLOC_CPU(dot_result_h_first[0], T, 1);
+        }
         TESTING_MALLOC_DEV(d_info[g], int, batchCount_gpu);
         TESTING_MALLOC_CPU(dot_result_h[g], T, batchCount_gpu);
         TESTING_MALLOC_CPU(logdet_result_h[g], T, batchCount_gpu);
-
         if (opts.vecchia)
         {
             // used for vecchia offset
-            TESTING_MALLOC_DEV(d_A_copy[g], T, lddacon * Acon * batchCount_gpu);
-            TESTING_MALLOC_DEV(d_A_conditioned[g], T, lddacon * An * batchCount_gpu);
-            TESTING_MALLOC_DEV(d_C_conditioned[g], T, lddccon * Cn * batchCount_gpu);
+            TESTING_MALLOC_DEV(d_A_conditioning[g], T, lddacon * Acon * batchCount_gpu);
+            TESTING_MALLOC_DEV(d_A_cross[g], T, lddacon * An * batchCount_gpu);
+            TESTING_MALLOC_DEV(d_C_conditioning[g], T, lddccon * Cn * batchCount_gpu);
             // store the offset
             TESTING_MALLOC_DEV(d_mu_offset[g], T, lddc * Cn * batchCount_gpu);
             TESTING_MALLOC_DEV(d_A_offset[g], T, ldda * An * batchCount_gpu);
@@ -195,7 +240,6 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
             // TESTING_MALLOC_DEV(d_mu[g], T, lddc * Cn * batchCount_gpu);
             // TESTING_MALLOC_DEV(d_mu_copy[g], T, lddc * Cn * batchCount_gpu);
         }
-
         /* TODO
         if (!strided)
         {
@@ -212,18 +256,26 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
         */
     }
 
-    createLogFileParams(opts.num_loc, M, opts.zvecs, opts.p, opts.vecchia_num);
+    createLogFileParams(opts.num_loc, M, opts.zvecs, opts.p, opts.vecchia_cs);
     /* 
     Dataset: defined by yourself 
     */
     // Uniform random generation for locations / read locations from disk
     // random generate with seed as 1
     if (opts.perf == 1){
-        locations = GenerateXYLoc(batchCount * lda / opts.p, 1);
-        for(int i = 0; i < Cm * batchCount; i++) h_C[i] = 0.;
+        locations = GenerateXYLoc(opts.num_loc / opts.p, 1); // 1 is the random seed
+        // for(int i = 0; i < opts.num_loc; i++) h_C[i] = (T) rand()/(T)RAND_MAX;
+        for(int i = 0; i < opts.num_loc; i++) h_C[i] = 0;
+        // h_C[0] = 1.;
+        // h_C[1] = 0.;
+        // h_C[2] = 10.;
+        // h_C[3] = 3.;
         // Xrand_matrix(Cm, Cn * batchCount, h_C, ldc);
         // printLocations(opts.num_loc, locations);
         // for(int i = 0; i < Cm * batchCount; i++) printf("%ith %lf \n",i, h_C[i]);
+        // // the optimization initial values
+        localtheta_initial = {1.0, 0.1, 0.5};
+
     }else{
         // univariate case
         // synthetic dataset (umcomment it if used)
@@ -244,11 +296,20 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
             locations = loadXYcsv(xy_path, int(opts.num_loc/opts.p)); 
             loadObscsv<T>(z_path, int(opts.num_loc/opts.p), h_C);
         }
-        if (opts.randomordering == 1){
-            random_locations(int(opts.num_loc/opts.p), locations, h_C);
+        // the optimization initial values
+        // localtheta_initial(opts.num_params, opts.lower_bound);
+        for (int i = 0; i < opts.num_params; i++) {
+            localtheta_initial[i] = opts.lower_bound;
         }
         data.distance_metric = 0;
     }
+    if (opts.randomordering==1){
+        random_locations(int(opts.num_loc/opts.p), locations, h_C);
+    }
+    // if (opts.morton==1){
+    //     zsort_locations(opts.num_loc, locations, h_C);
+    // }
+    
     // std::string xy_path = "./data/synthetic_ds/LOC_" + std::to_string(opts.num_loc) \
     //             + "_" + std::to_string(opts.zvecs);
     // std::string z_path = "./data/synthetic_ds/Z_" + std::to_string(opts.num_loc) \
@@ -263,55 +324,45 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     // loadObscsv<T>(z_path, opts.num_loc, h_C);
 
     /*
-    Dataset: defined by yourself 
+    Locations preparation
     */
 
-    if (batchCount * M != opts.num_loc) {
-        // printf("batchCount: ");
-        fprintf(stderr, "Error: batchCount * lda %d is not equal to %d\n", batchCount * M, opts.num_loc);
-        exit(0); // Exit the program with a non-zero status to indicate an error
-    }  
     // printLocations(opts.num_loc, locations);
     // printLocations(batchCount * lda, locations);
     if (opts.vecchia){
         // Following can be deleted with adding nearest neighbors
         // init for each iteration (necessary but low efficient)
         // locations_copy = (location*) malloc(sizeof(location));
-        // data.locations_copy = locations_copy;
-        // for (int i=0; i < batchCount; i ++){
-        //     locations_con[i] = (location*) malloc(sizeof(location));
-        //     data.locations_con[i] = locations_con[i];
-        // }               
+        // data.locations_copy = locations_copy;          
         locations_con = (location*) malloc(sizeof(location));
-        // locations_con->x = (T* ) malloc(int(opts.num_loc/opts.p) * sizeof(double));
-        // locations_con->y = (T* ) malloc(int(opts.num_loc/opts.p) * sizeof(double));
-        locations_con->x = (T* ) malloc(batchCount * opts.vecchia_num / opts.p * sizeof(double));
-        locations_con->y = (T* ) malloc(batchCount * opts.vecchia_num / opts.p * sizeof(double));
+        locations_con->x = (T* ) malloc(batchCount * cs / opts.p * sizeof(double));
+        locations_con->y = (T* ) malloc(batchCount * cs / opts.p * sizeof(double));
         locations_con->z = NULL;
         data.locations_con = locations_con;
-        // this does not matter, just some random number to make the matrix postive definite
-        // the first block makes no sense to the vecchia, just for the consistancy in batch computation
-        memcpy(h_C_conditioned, h_C, sizeof(T) * ldccon * Cn);
-        memcpy(locations_con->x, locations->x, sizeof(double) * ldccon);
-        memcpy(locations_con->y, locations->y, sizeof(double) * ldccon);
         if (opts.knn){
             // #pragma omp parallel for
-            for (int i = 1; i < batchCount; i++){
+            for (int i = 0; i < batchCount; i++){
                 // how many previous points you would like to include in your nearest neighbor searching
-                int con_loc = std::max(i * Cm - 1000 * Cm, 0);
-                findNearestPoints(h_C_conditioned, h_C, locations_con, locations, con_loc , i * opts.vecchia_num, (i + 1) * Cm, opts.vecchia_num);
+                int con_loc = std::max(i * bs - 10000 * bs, 0);
+                findNearestPoints(
+                    h_C_conditioning, h_C, locations_con, locations,
+                    con_loc , size_first + i * bs, 
+                    size_first + (i + 1) * bs, cs, i
+                );
+                // printLocations(opts.num_loc, locations);
+                // printLocations(cs * i, locations_con);
+                // fprintf(stderr, "asdasda\n");
             }
         }else{
-            // #pragma omp parallel for
-            for (int i = 1; i < batchCount; i++){
-                for (int j = 0; j < opts.vecchia_num; j++){
-                    locations_con->x[i * opts.vecchia_num + j] = locations->x[i * M - opts.vecchia_num + j];
-                    locations_con->y[i * opts.vecchia_num + j] = locations->y[i * M - opts.vecchia_num + j];
-                    h_C_conditioned[i * opts.vecchia_num + j] = h_C[i * M - opts.vecchia_num + j];
-                }
+            #pragma omp parallel for
+            for (int i = 0; i < batchCount; i++){
+                memcpy(locations_con->x + i * cs, locations->x + size_first - cs + i * bs, sizeof(T) * cs);
+                memcpy(locations_con->y + i * cs, locations->y + size_first - cs + i * bs, sizeof(T) * cs);
+                memcpy(h_C_conditioning + i * cs, h_C + size_first - cs + i * bs, sizeof(T) * cs);
             }
         }
     }
+    // printLocations(cs * batchCount, locations_con);
     // // true parameter
     // TESTING_MALLOC_CPU(localtheta, T, opts.num_params); // no nugget effect
     // localtheta[0] = opts.sigma;
@@ -344,6 +395,9 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     data.lddccon =  lddccon;
     data.batchCount_gpu = batchCount_gpu;
     data.batchCount = batchCount;
+    data.size_first = size_first;
+    data.bs = bs;
+    data.cs = cs;
     // int *h_M, *h_N,
     //     *d_M[ngpu], *d_N[ngpu];
     data.h_A = h_A;
@@ -352,9 +406,14 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     // data.localtheta = localtheta;
     data.locations = locations;
     // vecchia offset
-    data.h_A_copy = h_A_copy;
-    data.h_A_conditioned = h_A_conditioned;
-    data.h_C_conditioned = h_C_conditioned;
+    data.h_A_conditioning = h_A_conditioning;
+    data.h_A_cross = h_A_cross;
+    data.h_C_conditioning = h_C_conditioning;
+    // first block 
+    data.h_A_first = h_A_first;
+    data.h_C_first = h_C_first;
+    data.ldda_first = ldda_first;
+    data.lddc_first = lddc_first;
 
     // opts
     // lapack flags
@@ -367,7 +426,7 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     data.beta = opts.beta;
     data.nu = opts.nu;
     data.vecchia = opts.vecchia;
-    data.vecchia_num = opts.vecchia_num;
+    data.vecchia_cs = opts.vecchia_cs;
     data.iterations = 0;
     data.omp_threads = opts.omp_numthreads;
 
@@ -378,6 +437,7 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     data.zvecs = opts.zvecs;
     data.vecchia_time_total = 0; // used for accumulatet the time on vecchia
     data.p = opts.p; //bivariate = 2 or univariate = 1
+    data.perf = opts.perf;
     
     for (int i=0; i < ngpu; i++)
     {
@@ -391,13 +451,20 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
         data.dot_result_h[i] = dot_result_h[i];
         data.logdet_result_h[i] = logdet_result_h[i];
         data.d_info[i] = d_info[i];
-        data.d_A_copy[i] = d_A_copy[i];
-        data.d_A_conditioned[i] = d_A_conditioned[i];
-        data.d_C_conditioned[i] = d_C_conditioned[i];
+        data.d_A_conditioning[i] = d_A_conditioning[i];
+        data.d_A_cross[i] = d_A_cross[i];
+        data.d_C_conditioning[i] = d_C_conditioning[i];
         data.d_A_offset[i] = d_A_offset[i];
         data.d_mu_offset[i] = d_mu_offset[i];
         // data.d_C_copy[i] = d_C_copy[i];
         data.devices[i] = opts.devices[i];
+        // first block 
+        if (i==0){
+            data.d_A_first[0] = d_A_first[0];
+            data.d_C_first[0] = d_C_first[0];
+            data.logdet_result_h_first[0] = logdet_result_h_first[0];
+            data.dot_result_h_first[0] = dot_result_h_first[0];
+        }
     }
 
     struct timespec start_whole, end_whole;
@@ -417,11 +484,6 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     opt.set_maxeval(opts.maxiter);
     // opt.set_maxeval(1);
     opt.set_max_objective(llh_Xvecchia_batch, &data); // Pass a pointer to the data structure
-    // Set the initial guess from lower bound
-    // std::vector<T> localtheta_initial = {1.0, 0.1, 0.5};
-    std::vector<T> localtheta_initial(opts.num_params, opts.lower_bound);
-    // 0.759382, 0.044264, 2.31848
-    // std::vector<T> localtheta_initial = {0.1};
     // Optimize the log likelihood
     T maxf;
     
@@ -441,16 +503,16 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     clock_gettime(CLOCK_MONOTONIC, &end_whole);
     whole_time = end_whole.tv_sec - start_whole.tv_sec + (end_whole.tv_nsec - start_whole.tv_nsec) / 1e9;
     saveLogFileSum(num_iterations, localtheta_initial, 
-                    max_llh, whole_time/* data.vecchia_time_total*/, 
-                    M, opts.num_loc, opts.zvecs, opts.vecchia_num);
+                max_llh, whole_time, //whole_time or  data.vecchia_time_total
+                M, opts.num_loc, opts.zvecs, opts.vecchia_cs);
     // int num_evals = 0;
     // num_evals = opt.get_numevals();
     printf("Done! \n");
 
     // vecchia
-    cudaFreeHost(h_A_copy);
-    cudaFreeHost(h_A_conditioned);
-    cudaFreeHost(h_C_conditioned);
+    cudaFreeHost(h_A_conditioning);
+    cudaFreeHost(h_A_cross);
+    cudaFreeHost(h_C_conditioning);
     cudaFreeHost(locations->x);
     cudaFreeHost(locations->y);
     if (opts.vecchia){
@@ -464,9 +526,9 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     }
     for (int g = 0; g < ngpu; g++)
     {
-        check_error(cudaFree(d_A_copy[g]));
-        check_error(cudaFree(d_A_conditioned[g]));
-        check_error(cudaFree(d_C_conditioned[g]));
+        check_error(cudaFree(d_A_conditioning[g]));
+        check_error(cudaFree(d_A_cross[g]));
+        check_error(cudaFree(d_C_conditioning[g]));
         check_error(cudaFree(d_A_offset[g]));
         check_error(cudaFree(d_mu_offset[g]));
     }
@@ -497,10 +559,14 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
         // }
     }
 
-    for (int g; g < ngpu; g++)
+    for (int g=0; g < ngpu; g++)
     {
         free(dot_result_h[g]);
         free(logdet_result_h[g]);
+        if (g ==0){
+            free(dot_result_h_first[0]);
+            free(logdet_result_h_first[0]);
+        }
     }
 
     for (int g = 0; g < ngpu; g++)

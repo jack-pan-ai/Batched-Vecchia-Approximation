@@ -226,7 +226,7 @@ typedef struct kblas_opts
 
   // vecchia
   int vecchia;
-  int vecchia_num;
+  int vecchia_cs;
   int test;
 
   // optimization

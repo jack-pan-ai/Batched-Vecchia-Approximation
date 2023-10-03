@@ -65,18 +65,18 @@ void loadObscsv(const std::string& filename, int n, T* obs)
 template <class T>
 void saveLogFileParams(int iter, const double* theta, T llh,
                         T time_llh, T time_Xcmg, int num_loc, 
-                        int batchsize, int zvecs, int p, int vecchia_num)
+                        int batchsize, int zvecs, int p, int vecchia_cs)
 {
     // zvecs is the zvecs th replicate
     std::string filename = "./data/batchsize_" + std::to_string(batchsize) \
-                        + "_" + std::to_string(vecchia_num) \
+                        + "_" + std::to_string(vecchia_cs) \
                         +"/params_" + std::to_string(num_loc) + '_' \
                         + std::to_string(batchsize) + '_' + std::to_string(zvecs) + ".csv";
     // Open the log file in append mode
     std::ofstream file(filename, std::ios::app); // open file in append mode
     if (!file.is_open()) // check if file opened successfully
     {
-        std::cerr << "Unable to open file " << filename << " for writing." << std::endl;
+        std::cerr << "Warning: unable to open file " << filename << " for saving intermediate information." << std::endl;
         return;
     }
     
@@ -90,11 +90,11 @@ void saveLogFileParams(int iter, const double* theta, T llh,
     file.close(); // close the file
 }
 
-void createLogFileParams(int num_loc, int batchsize, int zvecs, int p, int vecchia_num)
+void createLogFileParams(int num_loc, int batchsize, int zvecs, int p, int vecchia_cs)
 {
     // zvecs is the zvecs th replicate
     std::string filename = "./data/batchsize_" + std::to_string(batchsize) \
-                        + "_" + std::to_string(vecchia_num) \
+                        + "_" + std::to_string(vecchia_cs) \
                         +"/params_" + std::to_string(num_loc) + '_' \
                         + std::to_string(batchsize) + '_' + std::to_string(zvecs) + ".csv";
     std::ofstream file(filename, std::ios::app); // open file in append mode
@@ -122,10 +122,10 @@ void createLogFileParams(int num_loc, int batchsize, int zvecs, int p, int vecch
 template <class T>
 void saveLogFileSum(int iterations, std::vector<T> theta, T llk, 
                     double time, int batchsize, int num_loc, 
-                    int zvecs, int vecchia_num) {
+                    int zvecs, int vecchia_cs) {
     // zvecs is the zvecs th replicate
     std::string filename = "./data/batchsize_" + std::to_string(batchsize) \
-                        + "_" + std::to_string(vecchia_num) \
+                        + "_" + std::to_string(vecchia_cs) \
                         + "/sum_" + std::to_string(num_loc) + '_' \
                         + std::to_string(batchsize) + '_' + std::to_string(zvecs) + ".csv";
     // Print the log message to the log file using printf

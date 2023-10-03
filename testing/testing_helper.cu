@@ -166,7 +166,7 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
   opts->tolerance  = 0.;
   opts->time       = 0;
   opts->nonUniform = 0; // TBD
-  opts->batchCount = 4;
+  // opts->batchCount = 4;
   opts->strided    = 1; // TBD
 
   // local theta for kernel in GPs
@@ -183,9 +183,9 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
   // performance test
   opts->perf = 0;
 
-  // vecchia conditioned
-  opts->vecchia =0; 
-  opts->vecchia_num =0; 
+  // vecchia conditioning
+  opts->vecchia = 0; 
+  opts->vecchia_cs =0; 
   opts->test =0;
 
   // optimization setting
@@ -310,21 +310,21 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
       kblas_assert( opts->nstream > 0,
        "error: --nstream %s is invalid; ensure nstream > 0.\n", argv[i] );
     }
-    else if ( (strcmp("--batchCount",   argv[i]) == 0 || strcmp("--batch",   argv[i]) == 0) && i+1 < argc ) {
-      i++;
-      int start, stop, step;
-      char op;
-      info = sscanf( argv[i], "%d:%d%c%d", &start, &stop, &op, &step );
-      if( info == 1 ){
-        opts->batch[0] = opts->batchCount = start;
-      }else {
-        fprintf( stderr, "error: --batchCount %s is invalid; ensure start > 0.\n",
-          argv[i] );
-        exit(1);
-      }
-      //opts->batchCount = atoi( argv[++i] );
-      //kblas_assert( opts->batchCount > 0, "error: --batchCount %s is invalid; ensure batchCount > 0.\n", argv[i] );
-    }
+    // else if ( (strcmp("--batchCount",   argv[i]) == 0 || strcmp("--batch",   argv[i]) == 0) && i+1 < argc ) {
+    //   i++;
+    //   int start, stop, step;
+    //   char op;
+    //   info = sscanf( argv[i], "%d:%d%c%d", &start, &stop, &op, &step );
+    //   if( info == 1 ){
+    //     opts->batch[0] = opts->batchCount = start;
+    //   }else {
+    //     fprintf( stderr, "error: --batchCount %s is invalid; ensure start > 0.\n",
+    //       argv[i] );
+    //     exit(1);
+    //   }
+    //   //opts->batchCount = atoi( argv[++i] );
+    //   //kblas_assert( opts->batchCount > 0, "error: --batchCount %s is invalid; ensure batchCount > 0.\n", argv[i] );
+    // }
     // else if ( (strcmp("--rank",   argv[i]) == 0) && i+1 < argc ) {
     //   i++;
     //   int start, stop, step;
@@ -363,24 +363,23 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
        opts->perf  = 1; 
        opts->maxiter = 1;
       }
-    // used for vecchia conditioned
+    // used for vecchia conditioning
     else if ( strcmp("--test", argv[i]) == 0 ) { opts->test  = 1;    }
     else if ( strcmp("--vecchia", argv[i]) == 0 ) {
-       opts->vecchia  = 1; 
-       opts->vecchia_num=opts->msize[0];
+       opts->vecchia  = 1;
       }
-    else if ( (strcmp("--vecchia_num",   argv[i]) == 0) && i+1 < argc ) {
+    else if ( (strcmp("--vecchia_cs",   argv[i]) == 0) && i+1 < argc ) {
       i++;
       int num;
       info = sscanf( argv[i], "%d", &num);
       if( info == 1 && num > 0 ){
-        opts->vecchia_num = num;
+        opts->vecchia_cs = num;
         opts->vecchia = 1;
       }else if(info == 1 && num == 0){
-        opts->vecchia_num = 0;
+        opts->vecchia_cs = 0;
         opts->vecchia = 0;
       }else{
-        fprintf( stderr, "error: --vecchia_num %s is invalid; ensure only one number and 0 <= vecchia_num <= M.\n", argv[i]);
+        fprintf( stderr, "error: --vecchia_cs %s is invalid; ensure only one number and 0 <= vecchia_cs <= N.\n", argv[i]);
         exit(1);
       }
     }

@@ -58,7 +58,7 @@ location *GenerateXYLoc(int n, int seed)
     int *grid = (int *) calloc((int) sqrtn, sizeof(int));
 
     for (i = 0; i < sqrtn; i++) {
-        grid[i] = i + 1.0;
+        grid[i] = i + 0.0;
     }
 
     for (i = 0; i < sqrtn && index < n; i++)
@@ -66,12 +66,12 @@ location *GenerateXYLoc(int n, int seed)
             // locations->x[index] = (grid[i] - 0.5 + uniform_distribution(-0.4, 0.4)) / sqrtn;
             // locations->y[index] = (grid[j] - 0.5 + uniform_distribution(-0.4, 0.4)) / sqrtn;
 			// grid (x, y)
-			locations->x[index] = (grid[i] + 0.0) / sqrtn;
-            locations->y[index] = (grid[j] + 0.0) / sqrtn;
+			locations->x[index] = (grid[i] + 1.0) / sqrtn;
+            locations->y[index] = (grid[j] + 1.0) / sqrtn;
             index++;
         }
     free(grid);
-    zsort_locations(n, locations);
+    // zsort_locations(n, locations);
     return locations;
 }
 

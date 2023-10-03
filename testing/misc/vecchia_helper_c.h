@@ -17,6 +17,8 @@ typedef struct llh_data {
     int lda, ldc, ldda, lddc;
     int ldacon, ldccon, Acon, Ccon;
     int lddacon, lddccon;
+    int size_first, bs, cs;
+    int ldda_first, lddc_first;
     int devices[NGPU_MAX_NUM];
     // TBD for non uniform 
     // int max_M, max_N;
@@ -31,6 +33,8 @@ typedef struct llh_data {
     int *d_ldda[NGPU_MAX_NUM], *d_lddc[NGPU_MAX_NUM];
     double *dot_result_h[NGPU_MAX_NUM];
     double *logdet_result_h[NGPU_MAX_NUM];
+    double *logdet_result_h_first[NGPU_MAX_NUM];
+    double *dot_result_h_first[NGPU_MAX_NUM];
     //  potrf used
     int *d_info[NGPU_MAX_NUM];
     location *locations;
@@ -42,11 +46,15 @@ typedef struct llh_data {
     double *localtheta;
 
     // vecchia offset
-    double *h_A_copy, *h_A_conditioned, *h_C_conditioned;
-    double *d_A_copy[NGPU_MAX_NUM], *d_A_conditioned[NGPU_MAX_NUM], *d_C_conditioned[NGPU_MAX_NUM];
+    double *h_A_conditioning, *h_A_cross, *h_C_conditioning;
+    double *d_A_conditioning[NGPU_MAX_NUM], *d_A_cross[NGPU_MAX_NUM], *d_C_conditioning[NGPU_MAX_NUM];
+    // vecchia first block 
+    // vecchia first block 
+    double *h_A_first, *h_C_first; 
+    double *d_A_first[NGPU_MAX_NUM], *d_C_first[NGPU_MAX_NUM]; 
     // used for the store the memory of offsets for mu and sigma
     double *d_A_offset[NGPU_MAX_NUM], *d_mu_offset[NGPU_MAX_NUM];
-    double *d_C_copy[NGPU_MAX_NUM];
+    // double *d_C_copy[NGPU_MAX_NUM];
 
 
     int batchCount_gpu;
@@ -66,7 +74,7 @@ typedef struct llh_data {
 
     // vecchia
     int vecchia;
-    int vecchia_num;
+    int vecchia_cs;
 
     // iter
     int iterations;
@@ -89,6 +97,8 @@ typedef struct llh_data {
     // real dataset
     int distance_metric; // 0 for euclidean; 1 for earth location.
 
+    // performance && test
+    int perf;
     kblasHandle_t *kblas_handle[NGPU_MAX_NUM];
 } llh_data;
 
