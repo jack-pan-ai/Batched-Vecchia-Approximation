@@ -71,7 +71,7 @@ location *GenerateXYLoc(int n, int seed)
             index++;
         }
     free(grid);
-    // zsort_locations(n, locations);
+    zsort_locations(n, locations);
     return locations;
 }
 

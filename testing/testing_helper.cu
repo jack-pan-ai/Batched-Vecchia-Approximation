@@ -184,7 +184,7 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
   opts->perf = 0;
 
   // vecchia conditioning
-  opts->vecchia = 0; 
+  opts->vecchia = 1; 
   opts->vecchia_cs =0; 
   opts->test =0;
 
@@ -365,9 +365,9 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
       }
     // used for vecchia conditioning
     else if ( strcmp("--test", argv[i]) == 0 ) { opts->test  = 1;    }
-    else if ( strcmp("--vecchia", argv[i]) == 0 ) {
-       opts->vecchia  = 1;
-      }
+    // else if ( strcmp("--vecchia", argv[i]) == 0 ) {
+    //    opts->vecchia  = 1;
+    //   }
     else if ( (strcmp("--vecchia_cs",   argv[i]) == 0) && i+1 < argc ) {
       i++;
       int num;
@@ -375,11 +375,11 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
       if( info == 1 && num > 0 ){
         opts->vecchia_cs = num;
         opts->vecchia = 1;
-      }else if(info == 1 && num == 0){
-        opts->vecchia_cs = 0;
-        opts->vecchia = 0;
+      // }else if(info == 1 && num == 0){
+      //   opts->vecchia_cs = 0;
+      //   opts->vecchia = 0;
       }else{
-        fprintf( stderr, "error: --vecchia_cs %s is invalid; ensure only one number and 0 <= vecchia_cs <= N.\n", argv[i]);
+        fprintf( stderr, "error: --vecchia_cs %s is invalid; ensure only one number and 0 < vecchia_cs <= N.\n", argv[i]);
         exit(1);
       }
     }
