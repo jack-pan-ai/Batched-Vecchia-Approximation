@@ -219,6 +219,21 @@ void printVecGPU(int Cm, int Cn, T *d_C, int lda, int i)
   free(h_C);
 }
 
+template <class T>
+void printVecGPUv1(int Cm, T *d_C)
+{
+  printf("-------------------------------\n");
+  T *h_C = (T *)malloc(sizeof(T) * Cm);
+  cudaMemcpy(h_C, d_C, sizeof(T) * Cm, cudaMemcpyDeviceToHost);
+  for (int i = 0; i < Cm; i++)
+  {
+    // printf("(%d)", i);
+    printf("%lf, ", (double)h_C[i]);
+  }
+  printf("\n-------------------------------\n");
+  free(h_C);
+}
+
 
 template<class T>
 void Xrand_matrix(long rows, long cols, T* A, long LDA)

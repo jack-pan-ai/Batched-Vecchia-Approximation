@@ -40,6 +40,7 @@
 #include <omp.h>
 #endif
 #include <kblas.h>
+#include <kblas_error.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -50,6 +51,7 @@ inline int iDivUp( int a, int b ) { return (a % b != 0) ? (a / b + 1) : (a / b);
 #define kmin(a,b) ((a)>(b)?(b):(a))
 #define kmax(a,b) ((a)<(b)?(b):(a))
 int kblas_roundup(int x, int y);
+
 
 ////////////////////////////////////////////////////////////
 // Error checking
@@ -93,6 +95,25 @@ void generateSArrayOfPointersHost(float* original_array, float** array_of_arrays
 // Reductions 
 int getMaxElement(int* a, size_t elements, cudaStream_t stream);
 int getMinElement(int* a, size_t elements, cudaStream_t stream);
+
+////////////////////////////////////////////////////////////
+// timing
+////////////////////////////////////////////////////////////
+// cudaEvent_t start, stop;
+// void start_timing(cudaStream_t curStream){
+//   check_error( cudaEventRecord(start, curStream) );
+//   check_error( cudaGetLastError() );
+// }
+// float get_elapsed_time(cudaStream_t curStream){
+//   check_error( cudaEventRecord(stop, curStream) );
+//   check_error( cudaGetLastError() );
+//   check_error( cudaEventSynchronize(stop) );
+//   check_error( cudaGetLastError() );
+//   float time = 0;
+//   check_error( cudaEventElapsedTime(&time, start, stop) );
+//   check_error( cudaGetLastError() );
+//   return time;
+// }
 
 ////////////////////////////////////////////////////////////
 // Allocations

@@ -34,48 +34,6 @@
 
 #include "testing_helper.h"
 
-// ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// // Generating array of pointers from a strided array
-// ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// template<class T>
-// struct UnaryAoAAssign : public thrust::unary_function<int, T*>
-// {
-//   T* original_array;
-//   int stride;
-//   UnaryAoAAssign(T* original_array, int stride) { this->original_array = original_array; this->stride = stride; }
-//   __host__ __device__
-//   T* operator()(const unsigned int& thread_id) const { return original_array + thread_id * stride; }
-// };
-
-// template<class T>
-// void generateArrayOfPointersT(T* original_array, T** array_of_arrays, int stride, int num_arrays, cudaStream_t stream)
-// {
-//   thrust::device_ptr<T*> dev_data(array_of_arrays);
-
-//   thrust::transform(
-//     thrust::cuda::par.on(stream),
-//     thrust::counting_iterator<int>(0),
-//     thrust::counting_iterator<int>(num_arrays),
-//     dev_data,
-//     UnaryAoAAssign<T>(original_array, stride)
-//     );
-
-//   check_error( cudaGetLastError() );
-// }
-
-// extern "C" void generateDArrayOfPointers(double* original_array, double** array_of_arrays, int stride, int num_arrays, cudaStream_t stream)
-// { generateArrayOfPointersT<double>(original_array, array_of_arrays, stride, num_arrays, stream); }
-
-// extern "C" void generateSArrayOfPointers(float* original_array, float** array_of_arrays, int stride, int num_arrays, cudaStream_t stream)
-// { generateArrayOfPointersT<float>(original_array, array_of_arrays, stride, num_arrays, stream); }
-
-// extern "C" void generateDArrayOfPointersHost(double* original_array, double** array_of_arrays, int stride, int num_arrays)
-// { for(int i = 0; i < num_arrays; i++) array_of_arrays[i] = original_array + i * stride; }
-
-// extern "C" void generateSArrayOfPointersHost(float* original_array, float** array_of_arrays, int stride, int num_arrays)
-// { for(int i = 0; i < num_arrays; i++) array_of_arrays[i] = original_array + i * stride; }
-
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Error helpers
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

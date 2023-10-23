@@ -77,11 +77,15 @@ all: $(EXE_BATCH)
 $(OBJ_DIR)/testing_helper.o: testing_helper.cu
 	$(NVCC) $(NVOPTS) $(NVOPTS_3) $(INCLUDES) $(NVCCFLAGS) -c $< -o $@
 
+# dotproduct operations
+$(OBJ_DIR)/aux_operations.o: aux_operations.cu
+	$(NVCC) $(NVOPTS) $(NVOPTS_3) $(INCLUDES) $(NVCCFLAGS) -c $< -o $@
+
 $(OBJ_DIR)/ckernel.o: ckernel.cpp
 	$(CXX) $(COPTS) $(INCLUDES) -c $< -o $@
 
-$(EXE_BATCH): $(BIN_DIR)/%: $(OBJ_DIR)/%.o $(KBLAS_LIB) $(OBJ_DIR)/testing_helper.o $(OBJ_DIR)/ckernel.o
-	$(CC) $(COPTS) $(OBJ_DIR)/testing_helper.o $(OBJ_DIR)/ckernel.o $< -o $@ $(LIB_PATH) $(LIB)
+$(EXE_BATCH): $(BIN_DIR)/%: $(OBJ_DIR)/%.o $(KBLAS_LIB) $(OBJ_DIR)/testing_helper.o $(OBJ_DIR)/ckernel.o $(OBJ_DIR)/aux_operations.o
+	$(CC) $(COPTS) $(OBJ_DIR)/testing_helper.o $(OBJ_DIR)/ckernel.o $(OBJ_DIR)/aux_operations.o $< -o $@ $(LIB_PATH) $(LIB)
 
 clean:
 	rm -f $(OBJ_DIR)/*.o $(EXE_BATCH)

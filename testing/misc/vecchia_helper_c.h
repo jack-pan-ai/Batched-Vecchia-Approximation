@@ -26,6 +26,7 @@ typedef struct llh_data {
 
     double *h_A, *h_C;
     double *d_C[NGPU_MAX_NUM];
+    double *h_C_data; // use for keep the data h_C will be overwritten;
     // int *h_M, *h_N,
     //     *d_M[NGPU_MAX_NUM], *d_N[NGPU_MAX_NUM];
     double **d_A_array[NGPU_MAX_NUM], **d_C_array[NGPU_MAX_NUM];
@@ -44,15 +45,16 @@ typedef struct llh_data {
 
     // vecchia offset
     double *h_A_conditioning, *h_A_cross, *h_C_conditioning;
-    double *h_A_offset_matrix, *h_mu_offset_matrix;;
+    // double *h_A_offset_matrix, *h_mu_offset_matrix;
+    double *h_A_offset_vector, *h_mu_offset_vector;
     double *d_A_conditioning[NGPU_MAX_NUM], *d_A_cross[NGPU_MAX_NUM], *d_C_conditioning[NGPU_MAX_NUM];
     // used for the store the memory of offsets for mu and sigma
-    double *d_A_offset[NGPU_MAX_NUM], *d_mu_offset[NGPU_MAX_NUM];
+    double *d_A_offset_vector[NGPU_MAX_NUM], *d_mu_offset_vector[NGPU_MAX_NUM];
     // double *d_C_copy[NGPU_MAX_NUM];
 
 
-    int batchCount_gpu[NGPU_MAX_NUM];
-    int batchCount;
+    long long batchCount_gpu[NGPU_MAX_NUM];
+    long long batchCount;
 
     // lapack flags
 	char uplo;
