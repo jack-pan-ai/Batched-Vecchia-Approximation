@@ -4,18 +4,20 @@
 
 void DgpuDotProducts(double *a, double *b,
                      double *results, int numDotProducts,
-                     int vectorSize);
+                     int vectorSize,
+                     cudaStream_t stream);
 void DgpuDotProducts_Strided(double *a, double *b,
                              double *results, int numDotProducts, 
-                             int vectorSize, int lddvectorSize);
+                             int vectorSize, int lddvectorSize,
+                             cudaStream_t stream);
 
 void cudaDcmg_powexp_strided( 
         double *A, 
-        int m, int n, 
+        int m, int n, int lddm,
         // int m0, int n0, 
         double* l1_x_cuda, double* l1_y_cuda, 
         double* l2_x_cuda, double* l2_y_cuda,
-        double *localtheta, int distance_metric, 
+        const double *localtheta, int distance_metric, 
         cudaStream_t stream);
 
 #endif // AUX_OPERATIONS_H

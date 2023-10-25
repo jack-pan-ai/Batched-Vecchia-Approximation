@@ -168,6 +168,10 @@ void core_dcmg(double* A, int m, int n,
                location *l1, location *l2,
                const double* localtheta, int distance_metric);
 
+void core_dcmg_exp(double* A, int m, int n,
+		// int m0, int n0, 
+		location* l1,
+		location* l2, const double* localtheta, int distance_metric);
 
 void core_sdcmg(double* A, int m, int n,
                 int m0, int n0,
@@ -327,3 +331,4 @@ void core_dcmg_trivariate_parsimonious(double* A, int m, int n,
 }
 #endif
 #endif
+

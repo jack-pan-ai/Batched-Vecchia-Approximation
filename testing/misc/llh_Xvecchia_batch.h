@@ -24,80 +24,84 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
     struct timespec start_dcmg, end_dcmg;
     clock_gettime(CLOCK_MONOTONIC, &start_dcmg);
 
+    // note that we need copy the first block oberservation;
+    // then h_C needs to point the location after the first block size;
     memcpy(data->h_C, data->h_C_data, sizeof(T) * data->num_loc);
+    data->h_C = data->h_C + data->cs - 1;
 
     // covariance matrix generation 
+    // the first h_A is only for complement;
     #pragma omp parallel for
-    for (int i=0; i < data->batchCount; i++)
+    for (int i=1; i < data->batchCount; i++)
     {
         // loc_batch: for example, p(y1|y2), the locations of y1 is the loc_batch
         location* loc_batch= (location *) malloc(sizeof (location));
         // h_A: \sigma_{11}
-        if (i == 0){
-            // the first independent block
-            loc_batch->x = data->locations->x;
-            loc_batch->y = data->locations->y;
-            loc_batch->z = NULL;  
-            // printLocations(data->cs, loc_batch); 
-            core_dcmg(data->h_A_conditioning,
-                        data->cs, data->cs,
-                        loc_batch, loc_batch, 
-                        localtheta, data->distance_metric);  
-            // printVectorCPU(data->bs, data->h_C, data->ldc, 0);
-            memcpy(data->h_C_conditioning, data->h_C, sizeof(T) * data->cs);
-            // the first cs data->h_A_cross has to be treated carefully (replace with h_C_conditioning)
-            // because we need its quadratic term
-            memcpy(data->h_A_cross, data->h_C, sizeof(T) * data->cs);
-            // note that we need copy the first block oberservation;
-            // then h_C needs to point the location after the first block size;
-            data->h_C = data->h_C + data->cs - 1;
-            // printVectorCPU(data->bs, data->h_C, data->ldc, 0);
-        }else{
-            // the rest batched block
-            loc_batch->x = data->locations->x + data->cs + i * data->bs;
-            loc_batch->y = data->locations->y + data->cs + i * data->bs;
-            loc_batch->z = NULL;  
-            // printLocations(data->bs, loc_batch); 
-            core_dcmg(data->h_A + i * data->bs * data->bs,
-                        data->bs, data->bs,
-                        loc_batch, loc_batch, 
-                        localtheta, data->distance_metric);  
-        }
+        // the rest batched block
+        loc_batch->x = data->locations->x + data->cs + i * data->bs;
+        loc_batch->y = data->locations->y + data->cs + i * data->bs;
+        loc_batch->z = NULL;  
+        // printLocations(data->bs, loc_batch); 
+        core_dcmg_exp(data->h_A + i * data->bs * data->bs,
+                    data->bs, data->bs,
+                    loc_batch, loc_batch, 
+                    localtheta, data->distance_metric);  
         free(loc_batch);
     }
-        #pragma omp parallel for
-        for (long long i=0; i < (data->batchCount - 1); i++)
-        {
-            // for example, p(y1|y2), the locations of y2 is the loc_batch_con
-            location* loc_batch_con= (location *) malloc(sizeof (location));
-            location* loc_batch= (location *) malloc(sizeof (location));
-            loc_batch_con->x = data->locations_con->x + i * data->cs;
-            loc_batch_con->y = data->locations_con->y + i * data->cs;
-            loc_batch_con->z = NULL;
-            loc_batch->x = data->locations->x + data->cs + i * data->bs;
-            loc_batch->y = data->locations->y + data->cs + i * data->bs;
-            loc_batch->z = NULL;   
-            // note that the h_A_conditioning[0] h_A_cross[0] is for first independent block
-            //*h_A_conditioning: \sigma_{22}
-            core_dcmg(data->h_A_conditioning + (i + 1) * data->cs * data->cs,
-                        data->cs, data->cs,
-                        loc_batch_con,
-                        loc_batch_con, localtheta, data->distance_metric);
-            // *h_A_cross: \sigma_{21}
-            core_dcmg(data->h_A_cross + (i + 1) * data->cs * data->bs,
-                        data->cs, data->bs,
-                        loc_batch_con,
-                        loc_batch, localtheta, data->distance_metric);
-            free(loc_batch);
-            free(loc_batch_con);
+
+    ///*************** Covariance matrix generation on GPU *****************//
+    for (int g = 0; g < data->ngpu; g++)
+    {
+        check_error(cudaSetDevice(data->devices[g]));
+        for (long long i = 0; i < data->batchCount_gpu[g]; i++){
+            cudaDcmg_powexp_strided( 
+                data->d_A_conditioning[g] + i * data->lddacon * data->Acon, 
+                data->cs, data->cs, data->lddacon,
+                // int m0, int n0, 
+                data->locations_con_xx_d[g] + i * data->cs, 
+                data->locations_con_yy_d[g] + i * data->cs,
+                data->locations_con_xx_d[g] + i * data->cs, 
+                data->locations_con_yy_d[g] + i * data->cs, 
+                localtheta, data->distance_metric,
+                kblasGetStream(*(data->kblas_handle[g])));
+            cudaDcmg_powexp_strided( 
+                data->d_A_cross[g] + i * data->lddacon * data->bs, 
+                data->Acon, data->bs, data->lddacon,
+                // int m0, int n0, 
+                data->locations_con_xx_d[g] + i * data->Acon, 
+                data->locations_con_yy_d[g] + i * data->Acon,
+                data->locations_xx_d[g] + i * data->bs, 
+                data->locations_yy_d[g] + i * data->bs, 
+                localtheta, data->distance_metric,
+                kblasGetStream(*(data->kblas_handle[g])));
         }
-    // }
-    // printVectorCPU(data->bs, data->h_C, data->ldc, 0);
+        check_error(cudaDeviceSynchronize());
+        check_error(cudaGetLastError());
+    }
+    // exit(0);
+    // the first cs data->d_A_cross has to be treated carefully (replace with h_C_conditioning)
+    // because we need its quadratic term
+    // check_cublas_error(cublasSetVectorAsync(data->cs, sizeof(T), 
+    //                             data->h_C_data, 1,
+    //                             data->d_A_cross[0], 1, 
+    //                             kblasGetStream(*(data->kblas_handle[0]))));
+    check_error(cudaSetDevice(data->devices[0]));
+    check_cublas_error(cublasSetVector(data->cs, sizeof(T), 
+                                data->h_C_data, 1,
+                                data->d_A_cross[0], 1));
+    // check_cublas_error(cublasSetMatrix(data->cs, 1, sizeof(T),
+    //                                         data->h_C_data,
+    //                                         data->ldccon, 
+    //                                         data->d_A_cross[0], 
+    //                                         data->lddccon));
+    check_error(cudaDeviceSynchronize());
+    check_error(cudaGetLastError());
+    // memcpy(data->h_A_cross, data->h_C_data, sizeof(T) * data->cs);
+
+    ///*****************************************************************************//
+
     clock_gettime(CLOCK_MONOTONIC, &end_dcmg);
     dcmg_time = end_dcmg.tv_sec - start_dcmg.tv_sec + (end_dcmg.tv_nsec - start_dcmg.tv_nsec) / 1e9;
-    // printf("[info] Covariance Generation with time %lf seconds. \n", dcmg_time);
-    // printMatrixCPU(data->M, data->M, data->h_A, data->lda, i);
-    // covariance matrix copt from host to device
     check_error(cudaGetLastError());
     // exit(0);
 
@@ -107,21 +111,14 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
     for (int g = 0; g < data->ngpu; g++)
     {
         check_error(cudaSetDevice(data->devices[g]));
-        if (g==0){
-            check_cublas_error(cublasSetMatrixAsync(
-                data->Cm, data->Cn * data->batchCount_gpu[g], sizeof(T),
-                data->h_C, data->ldc,
-                data->d_C[g], data->lddc, 
-                kblasGetStream(*(data->kblas_handle[g])))
-            );
-        }else{
-            check_cublas_error(cublasSetMatrixAsync(
-                data->Cm, data->Cn * data->batchCount_gpu[g], sizeof(T),
-                data->h_C + data->Cm * data->Cn * data->batchCount_gpu[g-1], data->ldc,
-                data->d_C[g], data->lddc, 
-                kblasGetStream(*(data->kblas_handle[g])))
-            );
-        }
+        int _sum=0;
+        for (int ig=0; ig < g; ig++) {_sum+=data->Cm * data->Cn * data->batchCount_gpu[ig];}
+        check_cublas_error(cublasSetMatrixAsync(
+            data->Cm, data->Cn * data->batchCount_gpu[g], sizeof(T),
+            data->h_C + _sum, data->ldc,
+            data->d_C[g], data->lddc, 
+            kblasGetStream(*(data->kblas_handle[g])))
+        );
         check_error(cudaDeviceSynchronize());
         check_error(cudaGetLastError());
     }
@@ -132,23 +129,6 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
     for (int g = 0; g < data->ngpu; g++)
     {
         check_error(cudaSetDevice(data->devices[g]));
-        // sigma_{22}
-        check_cublas_error(cublasSetMatrixAsync(data->cs, data->cs * data->batchCount_gpu[g], sizeof(T),
-                                            data->h_A_conditioning + batch22count,
-                                            data->ldacon, 
-                                            data->d_A_conditioning[g], 
-                                            data->lddacon, 
-                                            kblasGetStream(*(data->kblas_handle[g]))));
-        batch22count += static_cast<long long> (data->cs) * data->cs * data->batchCount_gpu[g];
-        // sigma{21}
-        check_cublas_error(cublasSetMatrixAsync(data->cs, data->bs * data->batchCount_gpu[g], sizeof(T),
-                                            data->h_A_cross + batch21count, 
-                                            data->ldacon, 
-                                            data->d_A_cross[g], 
-                                            data->lddacon, 
-                                            kblasGetStream(*(data->kblas_handle[g]))));
-        batch21count += data->cs * data->bs * data->batchCount_gpu[g] ;
-        // z_(2)
         check_cublas_error(cublasSetMatrixAsync(data->cs, data->Cn * data->batchCount_gpu[g], sizeof(T),
                                             data->h_C_conditioning + z2count,
                                             data->ldccon, 
@@ -172,8 +152,8 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
             // like 320/20 combination, 320 batchszie 20 batch count, cannot 
             // be allocated enough memory. But the reason is unclear now.
             kblas_potrf_batch_strided_wsquery(*(data->kblas_handle[g]), data->cs, data->batchCount_gpu[g]);
-            kblas_trsm_batch_strided_wsquery(*(data->kblas_handle[g]), 'L', data->cs, data->N, data->batchCount_gpu[g]);
-            kblas_trsm_batch_strided_wsquery(*(data->kblas_handle[g]), 'L', data->cs, data->N, data->batchCount_gpu[g]);
+            kblas_trsm_batch_strided_wsquery(*(data->kblas_handle[g]), 'L', data->lddccon, data->Cn, data->batchCount_gpu[g]);
+            kblas_trsm_batch_strided_wsquery(*(data->kblas_handle[g]), 'L', data->lddccon, data->Cn, data->batchCount_gpu[g]);
         }
         check_kblas_error(kblasAllocateWorkspace(*(data->kblas_handle[g])));
         check_error(cudaDeviceSynchronize()); // TODO sync with streams instead
@@ -181,7 +161,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
     }
 
     gflops_batch_potrf = data->batchCount * FLOPS_POTRF<T>(data->cs) / 1e9;
-    gflops_batch_trsm = 2*data->batchCount * FLOPS_TRSM<T>('L', data->lddacon, data->An) / 1e9;
+    gflops_batch_trsm = 2 * data->batchCount * FLOPS_TRSM<T>('L', data->lddacon, data->An) / 1e9;
     gflops_quadratic = 2 * data->batchCount * FLOPS_DOTPRODUCT<T>(data->cs) / 1e9;
     // gflops_quadratic = 2*FLOPS_GEMM_v1<T>(data->batchCount, data->batchCount, data->cs) / 1e9;
 
@@ -200,7 +180,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
         // for (int i = 0; i < data->batchCount_gpu[g]; i++)
         // {
         //     printf("%dth", i);
-        //     printMatrixGPU(data->Am, data->An, data->d_A_conditioning[g] + i * data->Am * data->ldda, data->ldda);
+        //     printMatrixGPU(data->Acon, data->Acon, data->d_A_conditioning[g] + i * data->Acon * data->lddacon, data->lddacon);
         // } 
         // printf("[info] Starting Cholesky decomposition. \n");
         if (data->strided)
@@ -229,14 +209,18 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
         check_error(cudaSetDevice(data->devices[g]));
         // printf("[info] Starting triangular solver. \n");
         if (data->strided)
-        {
-            check_kblas_error(kblasXtrsm_batch_strided(*(data->kblas_handle[g]),
-                                                        'L', 'L', 'N', data->diag,
-                                                        data->lddacon, data->An,
-                                                        1.,
-                                                        data->d_A_conditioning[g], data->lddacon, data->Acon * data->lddacon, // A <- L
-                                                        data->d_A_cross[g], data->lddacon, data->An * data->lddacon,
-                                                        data->batchCount_gpu[g])); 
+        {   
+            // for (int i = 0; i < data->batchCount_gpu[g]; i++)
+            // {
+            //     // printf("%dth", i);
+            //     printVecGPU(data->Acon, 1, data->d_A_cross[g] + i * data->lddacon, data->lddacon, i);
+            // } 
+            // for (int i = 0; i < data->batchCount_gpu[g]; i++)
+            // {
+            //     printf("%dth", i);
+            //     printMatrixGPU(data->Acon, data->Acon, data->d_A_conditioning[g] + i * data->Acon * data->lddacon, data->lddacon);
+            // } 
+            // fprintf(stderr, "%d \n", data->batchCount_gpu[g]);
             check_kblas_error(kblasXtrsm_batch_strided(*(data->kblas_handle[g]),
                                                         'L', 'L', 'N', data->diag,
                                                         data->lddccon, data->Cn,
@@ -244,6 +228,13 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
                                                         data->d_A_conditioning[g], data->lddacon, data->Acon * data->lddacon, // A <- L
                                                         data->d_C_conditioning[g], data->lddccon, data->Cn * data->lddccon,
                                                         data->batchCount_gpu[g]));
+            check_kblas_error(kblasXtrsm_batch_strided(*(data->kblas_handle[g]),
+                                                        'L', 'L', 'N', data->diag,
+                                                        data->lddacon, data->An,
+                                                        1.,
+                                                        data->d_A_conditioning[g], data->lddacon, data->Acon * data->lddacon, // A <- L
+                                                        data->d_A_cross[g], data->lddacon, data->An * data->lddacon,
+                                                        data->batchCount_gpu[g])); 
         }
         // check_kblas_error(kblasAllocateWorkspace(*(data->kblas_handle[g])));
         check_error(cudaDeviceSynchronize()); // TODO sync with streams instead
@@ -268,9 +259,20 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
         {
             // Launch the kernel
             // fprintf(stderr, "--------------gpu: %d ------------\n", g);
+            // printVecGPU(data->Acon, data->Cn, data->d_A_cross[0] + data->lddacon, data->lddacon, 2);
+            DgpuDotProducts_Strided(
+                data->d_A_cross[g], data->d_A_cross[g], 
+                data->d_A_offset_vector[g], 
+                data->batchCount_gpu[g], 
+                data->cs, data->lddacon, 
+                kblasGetStream(*(data->kblas_handle[g])));
+            DgpuDotProducts_Strided(
+                data->d_A_cross[g], data->d_C_conditioning[g], 
+                data->d_mu_offset_vector[g], 
+                data->batchCount_gpu[g], 
+                data->cs, data->lddacon,
+                kblasGetStream(*(data->kblas_handle[g])));
             // printVecGPUv1(data->batchCount_gpu[g], data->d_A_offset_vector[g]);
-            DgpuDotProducts_Strided(data->d_A_cross[g], data->d_A_cross[g], data->d_A_offset_vector[g], data->batchCount_gpu[g], data->cs, data->lddacon);
-            DgpuDotProducts_Strided(data->d_A_cross[g], data->d_C_conditioning[g], data->d_mu_offset_vector[g], data->batchCount_gpu[g], data->cs, data->lddacon);
             
         }
         check_error(cudaDeviceSynchronize()); // TODO sync with streams instead
@@ -288,16 +290,14 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
         int _count = 0;
         for (int j=0; j < g; j++) _count += data->batchCount_gpu[j];
         // copy the mu' and sigma' from gpu to host
-        cublasGetVectorAsync(data->batchCount_gpu[g], sizeof(T), 
+        check_cublas_error(cublasGetVectorAsync(data->batchCount_gpu[g], sizeof(T), 
                                 data->d_A_offset_vector[g], 1,
                                 data->h_A_offset_vector + _count, 1, 
-                                kblasGetStream(*(data->kblas_handle[g])));
-        cublasGetVectorAsync(data->batchCount_gpu[g], sizeof(T), 
+                                kblasGetStream(*(data->kblas_handle[g]))));
+        check_cublas_error(cublasGetVectorAsync(data->batchCount_gpu[g], sizeof(T), 
                                 data->d_mu_offset_vector[g], 1,
                                 data->h_mu_offset_vector + _count, 1, 
-                                kblasGetStream(*(data->kblas_handle[g])));
-
-        // _mat_bit_count += data->batchCount_gpu[g]*data->batchCount_gpu[g];
+                                kblasGetStream(*(data->kblas_handle[g]))));
         check_error(cudaDeviceSynchronize()); // TODO sync with streams instead
         check_error(cudaGetLastError());
     }
@@ -326,34 +326,22 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
 
     // scalar vecchia approximation
     // int _sum_batchcmat = 0;
-    for (int g = 0; g < data->ngpu; g++)
+    for (int g=0; g < data->ngpu; g++)
     {   
         if (g==0){
             for (int i=1; i < data->batchCount_gpu[g]; i++){
-                // data->h_C[i] -= data->h_mu_offset_matrix[_sum_batchcmat + i + i * data->batchCount_gpu[g]]; 
-                // // the first is no meaning 
-                // data->h_A[_sum_batchcvec + i] -= data->h_A_offset_matrix[_sum_batchcmat + i + i * data->batchCount_gpu[g]]; 
-                // // llhi calulation
-                // data->dot_result_h[g][i] = data->h_C[_sum_batchcvec + i] * data->h_C[_sum_batchcvec + i] / data->h_A[_sum_batchcvec + i];
-                // data->logdet_result_h[g][i] = log(data->h_A[_sum_batchcvec + i] );
                 // correction
                 data->h_C[i] -= data->h_mu_offset_vector[i]; 
                 data->h_A[i] -= data->h_A_offset_vector[i]; 
                 // llhi calulation
                 data->dot_result_h[g][i] = data->h_C[i] * data->h_C[i] / data->h_A[i];
-                // fprintf(stderr, "The %d, %lf \n", i, log(data->h_A_offset_vector[i]));
                 data->logdet_result_h[g][i] = log(data->h_A[i] );
+                // fprintf(stderr, "The %d, %lf \n", i, data->h_A_offset_vector[i]);
             }
         }else{
             int _sum_batchcvec = 0;
             for (int j=0; j < g; j++) {_sum_batchcvec += data->batchCount_gpu[j];}
             for (int i=0; i < data->batchCount_gpu[g]; i++){
-                // data->h_C[_sum_batchcvec + i] -= data->h_mu_offset_matrix[_sum_batchcmat + i + i * data->batchCount_gpu[g]]; 
-                // // the first is no meaning 
-                // data->h_A[_sum_batchcvec + i] -= data->h_A_offset_matrix[_sum_batchcmat + i + i * data->batchCount_gpu[g]]; 
-                // // llhi calulation
-                // data->dot_result_h[g][i] = data->h_C[_sum_batchcvec + i] * data->h_C[_sum_batchcvec + i] / data->h_A[_sum_batchcvec + i];
-                // data->logdet_result_h[g][i] = log(data->h_A[_sum_batchcvec + i] );
                 data->h_C[_sum_batchcvec + i] -= data->h_mu_offset_vector[_sum_batchcvec + i]; 
                 // the first is no meaning 
                 data->h_A[_sum_batchcvec + i] -= data->h_A_offset_vector[_sum_batchcvec + i]; 
@@ -362,10 +350,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
                 data->logdet_result_h[g][i] = log(data->h_A[_sum_batchcvec + i] );
             }
         }
-        // _sum_batchcvec += data->batchCount_gpu[g];
-        // _sum_batchcmat += data->batchCount_gpu[g] * data->batchCount_gpu[g];
     }
-    // time = get_elapsed_time(curStream);
     // printf("-----------------------------------------\n");
     for (int g = 0; g < data->ngpu; g++)
     {   

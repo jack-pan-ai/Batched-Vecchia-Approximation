@@ -1,8 +1,8 @@
 #!/bin/bash
 
-N=100
+N=900
 Nbs=1
-Ncs=20
+Ncs=899
 
 echo "================ Vecchia likelihood log f(x1) + log f(x1|x2) 1 gpu ========================"
 # used for vecchia for full likelihood (2 batch) + knn

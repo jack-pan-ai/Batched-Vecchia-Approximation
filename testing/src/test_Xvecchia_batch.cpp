@@ -79,22 +79,13 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     // bs: block size; cs: conditioning size
     int bs, cs; 
     
-    // TBD for non uniform
-    // int max_M, max_N;
-    // int *h_M, *h_N,
-    //     *d_M[ngpu], *d_N[ngpu];
-    // int seed = 0;
     kblasHandle_t kblas_handle[ngpu];
 
     T *h_A, *h_C;
     T *h_C_data;
     T *d_C[ngpu];
-    // T **d_A_array[ngpu], **d_C_array[ngpu];
-    // int *d_ldda[ngpu], *d_lddc[ngpu];
     T *dot_result_h[ngpu];
     T *logdet_result_h[ngpu];
-    // T *logdet_result_h_first[ngpu];
-    // T *dot_result_h_first[ngpu];
     long long *batchCount_gpu;
     //  potrf used
     int *d_info[ngpu];
@@ -108,8 +99,8 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     T *grad; // used for future gradient based optimization, please do not comment it
 
     // vecchia offset
-    T *h_A_conditioning, *h_A_cross, *h_C_conditioning;
-    // T *h_A_offset_matrix, *h_mu_offset_matrix; 
+    // T *h_A_conditioning;
+    T *h_A_cross, *h_C_conditioning;
     T *h_A_offset_vector, *h_mu_offset_vector; 
     T *d_A_conditioning[ngpu], *d_A_cross[ngpu], *d_C_conditioning[ngpu];
     int ldacon, ldccon, Acon, Ccon;
@@ -117,7 +108,9 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     // used for the store the memory of offsets for mu and sigma
     // or, you could say that this is correction term
     T *d_A_offset_vector[ngpu], *d_mu_offset_vector[ngpu];
-    // T *d_C_copy[ngpu];
+    // covariance matrix generation on GPU
+    double *locations_xx_d[ngpu], *locations_yy_d[ngpu];
+    double *locations_con_xx_d[ngpu], *locations_con_yy_d[ngpu];
 
     // time 
     double whole_time = 0;
@@ -136,15 +129,6 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
         check_error(cudaDeviceSynchronize());
         check_error(cudaGetLastError());
     }
-
-    // /*
-    // seed for location generation
-    // */
-    // int seed[batchCount];
-    // for (int i = 0; i < batchCount; i++)
-    // {
-    //     seed[i] = i + 1;
-    // }
 
     M = opts.msize[0];
     N = opts.nsize[0];
@@ -189,20 +173,6 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     }else{
         batchCount_gpu[0] = batchCount / ngpu;
     }
-    // for (int g = 0; g < ngpu; g++){
-    //     if (batchCount % ngpu != 0){
-    //         if (g == (ngpu - 1)){
-    //             // last one contain the rests
-    //             batchCount_gpu[g] = batchCount / ngpu + batchCount % ngpu;
-    //         }else{
-    //             // the rest has the same 
-    //             batchCount_gpu[g] = batchCount / ngpu;
-    //         }
-    //         // fprintf(stderr, "batchCount_gpu[g]: %d \n", batchCount_gpu[g]);
-    //     }else{
-    //         batchCount_gpu[g] = batchCount / ngpu;
-    //     }
-    // }
     
 
     // Vecchia config for strided access
@@ -219,7 +189,7 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     if (opts.vecchia)
     {
         // used for vecchia offset
-        TESTING_MALLOC_CPU(h_A_conditioning, T,  static_cast<long long> (ldacon) * Acon * batchCount);
+        // TESTING_MALLOC_CPU(h_A_conditioning, T,  static_cast<long long> (ldacon) * Acon * batchCount);
         TESTING_MALLOC_CPU(h_A_cross, T, ldacon * An * batchCount);
         TESTING_MALLOC_CPU(h_C_conditioning, T, ldccon * Cn * batchCount);
         // extra memory for mu
@@ -236,16 +206,22 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
         {
             // used for vecchia offset
             TESTING_MALLOC_DEV(d_A_conditioning[g], T, static_cast<long long> (lddacon) * Acon * batchCount_gpu[g]);
-            TESTING_MALLOC_DEV(d_A_cross[g], T, lddacon * An * batchCount_gpu[g]);
+            TESTING_MALLOC_DEV(d_A_cross[g], T, static_cast<long long>  (lddacon) * An * batchCount_gpu[g]);
             TESTING_MALLOC_DEV(d_C_conditioning[g], T, lddccon * Cn * batchCount_gpu[g]);
             TESTING_MALLOC_DEV(d_mu_offset_vector[g], T, batchCount_gpu[g]);
             TESTING_MALLOC_DEV(d_A_offset_vector[g], T, batchCount_gpu[g]);
+            // covariance matrix generation on GPU
+            TESTING_MALLOC_DEV(locations_xx_d[g], double, batchCount_gpu[g]);
+            TESTING_MALLOC_DEV(locations_yy_d[g], double, batchCount_gpu[g]);
+            TESTING_MALLOC_DEV(locations_con_xx_d[g], double, cs * batchCount_gpu[g]);
+            TESTING_MALLOC_DEV(locations_con_yy_d[g], double, cs * batchCount_gpu[g]);
         }
-        TESTING_MALLOC_DEV(d_C[g], T, lddc * Cn * batchCount_gpu[g]);
+        TESTING_MALLOC_DEV(d_C[g], T, lddc * batchCount_gpu[g]);
         TESTING_MALLOC_DEV(d_info[g], int, ngpu);
         check_error(cudaDeviceSynchronize());
         check_error(cudaGetLastError());
     }
+    // exit(0);
     // fprintf(stderr, "%d %d %d", lddacon, Acon,  batchCount_gpu[0]);
 
     createLogFileParams(opts.num_loc, M, opts.zvecs, opts.p, cs);
@@ -321,17 +297,21 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     // printLocations(batchCount * lda, locations);
     memcpy(h_C, h_C_data, sizeof(T) * opts.num_loc);
     if (opts.vecchia){
-        // Following can be deleted with adding nearest neighbors
-        // init for each iteration (necessary but low efficient)
-        // locations_copy = (location*) malloc(sizeof(location));
-        // data.locations_copy = locations_copy;          
+        /************* Nearest neighbor searching ****************/ 
         locations_con = (location*) malloc(sizeof(location));
-        locations_con->x = (T* ) malloc((batchCount - 1) * cs / opts.p * sizeof(double));
-        locations_con->y = (T* ) malloc((batchCount - 1)* cs / opts.p * sizeof(double));
+        locations_con->x = (T* ) malloc(batchCount * cs / opts.p * sizeof(double));
+        locations_con->y = (T* ) malloc(batchCount * cs / opts.p * sizeof(double));
         locations_con->z = NULL;
         data.locations_con = locations_con;
         // copy for the first independent block
+        // h_C_data: quadratic calculation for mu
+        // locations_con->x/y: covariance matrix generation
         memcpy(h_C_conditioning, h_C_data, sizeof(T) * cs);
+        memcpy(locations_con->x, locations->x, sizeof(T) * cs);
+        memcpy(locations_con->y, locations->y, sizeof(T) * cs);
+        // to match the nearest neighbor searching algorithm
+        locations_con->x += cs;
+        locations_con->y += cs;
         if (opts.knn){
             #pragma omp parallel for
             for (int i = 0; i < (batchCount - 1); i++){
@@ -355,17 +335,42 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                 memcpy(h_C_conditioning + (i + 1) * cs, h_C + i * bs, sizeof(T) * cs);
             }
         }
+        // point back to the starting;
+        locations_con->x -= cs;
+        locations_con->y -= cs;
+        /************* Copy location from CPU to GPU ****************/ 
+        for (int g = 0; g < ngpu; g++)
+        {
+            check_error(cudaSetDevice(opts.devices[g]));
+            int _sum=0; 
+            for (int ig=0; ig < g; ig++) {_sum += batchCount_gpu[ig];}
+            // conditioning locations
+            check_cublas_error(cublasSetVectorAsync(
+                    cs * batchCount_gpu[g], sizeof(double), 
+                    locations_con->x + _sum * cs, 1,
+                    locations_con_xx_d[g], 1, 
+                    kblasGetStream(kblas_handle[g])));
+            check_cublas_error(cublasSetVectorAsync(
+                    cs * batchCount_gpu[g], sizeof(double), 
+                    locations_con->y + _sum * cs, 1,
+                    locations_con_yy_d[g], 1, 
+                    kblasGetStream(kblas_handle[g])));
+            // condition locations, 
+            check_cublas_error(cublasSetVectorAsync(
+                    batchCount_gpu[g], sizeof(double), 
+                    locations->x + (cs - 1) + _sum, 1,
+                    locations_xx_d[g], 1, 
+                    kblasGetStream(kblas_handle[g])));
+            check_cublas_error(cublasSetVectorAsync(
+                    batchCount_gpu[g], sizeof(double), 
+                    locations->y + (cs - 1) + _sum, 1,
+                    locations_yy_d[g], 1, 
+                    kblasGetStream(kblas_handle[g])));
+            check_error(cudaDeviceSynchronize());
+            check_error(cudaGetLastError());
+        }
+        /**********************************************************/ 
     }
-    // printLocations(cs * batchCount, locations_con);
-    // // true parameter
-    // TESTING_MALLOC_CPU(localtheta, T, opts.num_params); // no nugget effect
-    // localtheta[0] = opts.sigma;
-    // localtheta[1] = opts.beta;
-    // localtheta[2] = opts.nu;
-    // TESTING_MALLOC_CPU(localtheta_initial, T, opts.num_params); // no nugget effect
-    // localtheta_initial[0] = 0.01;
-    // localtheta_initial[1] = 0.01;
-    // localtheta_initial[2] = 0.01;
 
     // prepare these for llh_Xvecchia_batch
     data.M = M;
@@ -399,7 +404,7 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     // data.localtheta = localtheta;
     data.locations = locations;
     // vecchia offset
-    data.h_A_conditioning = h_A_conditioning;
+    // data.h_A_conditioning = h_A_conditioning;
     data.h_A_cross = h_A_cross;
     data.h_C_conditioning = h_C_conditioning;
     // data.h_A_offset_matrix = h_A_offset_matrix;
@@ -435,10 +440,6 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
         data.kblas_handle[g] = &(kblas_handle[g]);
 
         data.d_C[g] = d_C[g];
-        // data.d_A_array[g] = d_A_array[g];
-        // data.d_C_array[g] = d_C_array[g];
-        // data.d_ldda[g] = d_ldda[g];
-        // data.d_lddc[g] = d_lddc[g];
         data.dot_result_h[g] = dot_result_h[g];
         data.logdet_result_h[g] = logdet_result_h[g];
         data.d_info[g] = d_info[g];
@@ -447,9 +448,13 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
         data.d_C_conditioning[g] = d_C_conditioning[g];
         data.d_A_offset_vector[g] = d_A_offset_vector[g];
         data.d_mu_offset_vector[g] = d_mu_offset_vector[g];
-        // data.d_C_copy[g] = d_C_copy[g];
         data.devices[g] = opts.devices[g];
         data.batchCount_gpu[g] = batchCount_gpu[g];
+        // covariance matrix generation on GPU
+        data.locations_xx_d[g] = locations_xx_d[g];
+        data.locations_yy_d[g] = locations_yy_d[g];
+        data.locations_con_xx_d[g] = locations_con_xx_d[g];
+        data.locations_con_yy_d[g] = locations_con_yy_d[g];
     }
 
     struct timespec start_whole, end_whole;
@@ -494,7 +499,7 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     printf("Done! \n");
 
     // vecchia
-    cudaFreeHost(h_A_conditioning);
+    // cudaFreeHost(h_A_conditioning);
     cudaFreeHost(h_A_cross);
     cudaFreeHost(h_C_conditioning);
     cudaFreeHost(locations->x);
@@ -515,6 +520,8 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
         check_error(cudaFree(d_C_conditioning[g]));
         check_error(cudaFree(d_A_offset_vector[g]));
         check_error(cudaFree(d_mu_offset_vector[g]));
+        check_error(cudaFree(locations_con_xx_d[g]));
+        check_error(cudaFree(locations_con_yy_d[g]));
     }
     // independent
     cudaFreeHost(h_A);

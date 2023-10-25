@@ -1050,6 +1050,43 @@ void core_dcmg(double* A, int m, int n,
 	gsl_set_error_handler_off();
 }
 
+void core_dcmg_exp(double* A, int m, int n,
+		// int m0, int n0, 
+		location* l1,
+		location* l2, const double* localtheta, int distance_metric) {
+
+	int i, j;
+	// int i0 = m0;
+	// int j0 = n0;
+	int i0 = 0;
+	int j0 = 0;
+	double x0, y0, z0;
+	double expr = 0.0;
+	double con = 0.0;
+	double sigma_square = localtheta[0];// * localtheta[0];
+
+	// con = pow(2, (0.5 - 1)) * tgamma(0.5);
+	// con = 1.0 / con;
+	// con = sigma_square * con;
+	for (i = 0; i < m; i++) {
+		j0 = 0;
+		for (j = 0; j < n; j++) {
+			expr = calculateDistance(l1, l2, i0, j0, distance_metric, 0) / localtheta[1];
+			// expr /= 100.; /*comment it for synthetic dataset*/
+			// printf("%lf \n", expr);
+			if (expr == 0)
+				A[i + j * m] = sigma_square /*+ 1e-4*/;
+			else
+				A[i + j * m] = sigma_square * pow(expr, 0.5);
+					// * gsl_sf_bessel_Knu(0.5, expr); // Matern Function
+			j0++;
+			// printf("%lf\n", A[i + j * m]);
+		}
+		i0++;
+	}
+	// gsl_set_error_handler_off();
+}
+
 /*****************************************************************************
  *
  *  core_ng_dcmg - TODO

@@ -27,8 +27,6 @@ typedef struct llh_data {
     double *h_A, *h_C;
     double *d_C[NGPU_MAX_NUM];
     double *h_C_data; // use for keep the data h_C will be overwritten;
-    // int *h_M, *h_N,
-    //     *d_M[NGPU_MAX_NUM], *d_N[NGPU_MAX_NUM];
     double **d_A_array[NGPU_MAX_NUM], **d_C_array[NGPU_MAX_NUM];
     int *d_ldda[NGPU_MAX_NUM], *d_lddc[NGPU_MAX_NUM];
     double *dot_result_h[NGPU_MAX_NUM];
@@ -38,19 +36,20 @@ typedef struct llh_data {
     location *locations;
     location *locations_con_boundary;
     location* locations_con;
-    // location* locations_con[BATCHCOUNT_MAX];
     location* locations_copy;
     // no nugget
     double *localtheta;
 
     // vecchia offset
     double *h_A_conditioning, *h_A_cross, *h_C_conditioning;
-    // double *h_A_offset_matrix, *h_mu_offset_matrix;
     double *h_A_offset_vector, *h_mu_offset_vector;
     double *d_A_conditioning[NGPU_MAX_NUM], *d_A_cross[NGPU_MAX_NUM], *d_C_conditioning[NGPU_MAX_NUM];
     // used for the store the memory of offsets for mu and sigma
     double *d_A_offset_vector[NGPU_MAX_NUM], *d_mu_offset_vector[NGPU_MAX_NUM];
-    // double *d_C_copy[NGPU_MAX_NUM];
+    // gpu covariance matrix generation
+    double *locations_xx_d[NGPU_MAX_NUM], *locations_yy_d[NGPU_MAX_NUM];
+    double *locations_con_xx_d[NGPU_MAX_NUM], *locations_con_yy_d[NGPU_MAX_NUM];
+    
 
 
     long long batchCount_gpu[NGPU_MAX_NUM];

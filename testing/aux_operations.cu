@@ -10,7 +10,11 @@
 // gpuDotProducts
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // CUDA kernel to calculate multiple dot products in parallel
-__global__ void DgpuDotProducts_kernel(double *a, double *b, double *results, int numDotProducts, int vectorSize) {
+__global__ void DgpuDotProducts_kernel(
+        double *a, double *b, 
+        double *results, 
+        int numDotProducts, 
+        int vectorSize) {
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
 
     // Iterate over dot products
@@ -27,12 +31,17 @@ __global__ void DgpuDotProducts_kernel(double *a, double *b, double *results, in
     }
 }
 
-void DgpuDotProducts(double *a, double *b, double *results, int numDotProducts, int vectorSize) {
+void DgpuDotProducts(
+        double *a, double *b, 
+        double *results, 
+        int numDotProducts, 
+        int vectorSize,
+        cudaStream_t stream) {
     
     int block_dim = 256;
     int grid_dim = (numDotProducts + block_dim - 1) / block_dim;
     
-    DgpuDotProducts_kernel<<<grid_dim, block_dim>>>(a, b, results, numDotProducts, vectorSize);
+    DgpuDotProducts_kernel<<<grid_dim, block_dim, 0, stream>>>(a, b, results, numDotProducts, vectorSize);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -40,7 +49,11 @@ void DgpuDotProducts(double *a, double *b, double *results, int numDotProducts, 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // CUDA kernel to calculate multiple dot products in parallel
 
-__global__ void DgpuDotProducts_Strided_kernel(double *a, double *b, double *results, int numDotProducts, int vectorSize, int lddvectorSize) {
+__global__ void DgpuDotProducts_Strided_kernel(
+        double *a, double *b, double *results, 
+        int numDotProducts, 
+        int vectorSize, 
+        int lddvectorSize) {
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
 
     // Iterate over dot products
@@ -57,12 +70,17 @@ __global__ void DgpuDotProducts_Strided_kernel(double *a, double *b, double *res
     }
 }
 
-void DgpuDotProducts_Strided(double *a, double *b, double *results, int numDotProducts, int vectorSize, int lddvectorSize) {
+void DgpuDotProducts_Strided(double *a, double *b, 
+        double *results, 
+        int numDotProducts, 
+        int vectorSize, 
+        int lddvectorSize,
+        cudaStream_t stream) {
     
     int block_dim = 256;
     int grid_dim = (numDotProducts + block_dim - 1) / block_dim;
     
-    DgpuDotProducts_Strided_kernel<<<grid_dim, block_dim>>>(a, b, results, numDotProducts, vectorSize, lddvectorSize);
+    DgpuDotProducts_Strided_kernel<<<grid_dim, block_dim, 0, stream>>>(a, b, results, numDotProducts, vectorSize, lddvectorSize);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -71,7 +89,7 @@ void DgpuDotProducts_Strided(double *a, double *b, double *results, int numDotPr
 
 __global__ void Dcmg_powexp_strided_kernel(
         double *A, 
-        int m, int n, 
+        int m, int n, int lddm,
         // int m0, int n0, 
         double* l1_x_cuda, double* l1_y_cuda, 
         double* l2_x_cuda, double* l2_y_cuda,
@@ -83,6 +101,7 @@ __global__ void Dcmg_powexp_strided_kernel(
      * @param[in] A: 1D array which saves the matrix entries by column.
      * @param[in] m: number of rows of tile.
      * @param[in] n: number of columns of tile.
+     * @param[in] lddm: leading dimension of columns of tile.
      * @param[in] m0: Global row start point of tile.
      * @param[in] n0: Global column start point of tile.
      * @param[in] l1_x_cuda: value of x-axis of locaton vector l1.
@@ -99,16 +118,18 @@ __global__ void Dcmg_powexp_strided_kernel(
     if(idx >= m || idy >= n) return;
 
     double expr  = 0.0;
-    double expr1 = 0.0;
+    // double expr1 = 0.0;
     double sigma_square = localtheta0;
-    expr = sqrt(pow((l2_x_cuda[idy] - l1_x_cuda[idx]), 2) +
-            pow((l2_y_cuda[idy] - l1_y_cuda[idx]), 2));
-    expr1 = pow(expr, localtheta2);
+    expr = sqrt(
+                pow((l2_x_cuda[idy] - l1_x_cuda[idx]), 2) +
+                pow((l2_y_cuda[idy] - l1_y_cuda[idx]), 2)
+            );
+    // expr1 = pow(expr, localtheta2);
     if(expr == 0){
-        A[idx + idy * m] = sigma_square /*+ 1e-4*/;
+        A[idx + idy * lddm] = sigma_square /*+ 1e-4*/;
     }
     else{
-        A[idx + idy * m] = sigma_square *  exp(-(expr1/localtheta1)); // power-exp kernel
+        A[idx + idy * lddm] = sigma_square *  exp(-(expr/localtheta1)); // power-exp kernel
     }
     
 
@@ -116,19 +137,22 @@ __global__ void Dcmg_powexp_strided_kernel(
 
 void cudaDcmg_powexp_strided( 
         double *A, 
-        int m, int n, 
+        int m, int n, int lddm,
         // int m0, int n0, 
         double* l1_x_cuda, double* l1_y_cuda, 
         double* l2_x_cuda, double* l2_y_cuda,
-        double *localtheta, int distance_metric, 
+        const double *localtheta, int distance_metric, 
         cudaStream_t stream){
 
-    int nBlockx= (m+CHUNKSIZE-1)/CHUNKSIZE;
-    int nBlocky= (n+CHUNKSIZE-1)/CHUNKSIZE;
+    int nBlockx = (m + CHUNKSIZE - 1)/CHUNKSIZE;
+    int nBlocky = (n + CHUNKSIZE - 1)/CHUNKSIZE;
     dim3 dimBlock(CHUNKSIZE,CHUNKSIZE);
     dim3 dimGrid(nBlockx,nBlocky);
 
-    // Dcmg_powexp_strided_kernel<<<dimGrid, dimBlock, 0, stream>>>(A, m, n, m0, n0, l1_x_cuda, l1_y_cuda, l2_x_cuda, l2_y_cuda, localtheta[0], localtheta[1],localtheta[2], distance_metric);
-    Dcmg_powexp_strided_kernel<<<dimGrid, dimBlock, 0, stream>>>(A, m, n, l1_x_cuda, l1_y_cuda, l2_x_cuda, l2_y_cuda, localtheta[0], localtheta[1],localtheta[2], distance_metric);
-
+    Dcmg_powexp_strided_kernel<<<dimGrid, dimBlock, 0, stream>>>(
+        A, m, n, lddm, 
+        l1_x_cuda, l1_y_cuda, 
+        l2_x_cuda, l2_y_cuda, 
+        localtheta[0], localtheta[1],localtheta[2], 
+        distance_metric);
 }
