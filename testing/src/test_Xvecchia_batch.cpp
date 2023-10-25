@@ -78,23 +78,13 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     // vecchia language
     // bs: block size; cs: conditioning size
     int bs, cs; 
-    
-    // TBD for non uniform
-    // int max_M, max_N;
-    // int *h_M, *h_N,
-    //     *d_M[ngpu], *d_N[ngpu];
-    // int seed = 0;
     kblasHandle_t kblas_handle[ngpu];
 
     T *h_A, *h_C;
     T *h_C_data;
     T *d_C[ngpu];
-    // T **d_A_array[ngpu], **d_C_array[ngpu];
-    // int *d_ldda[ngpu], *d_lddc[ngpu];
     T *dot_result_h[ngpu];
     T *logdet_result_h[ngpu];
-    // T *logdet_result_h_first[ngpu];
-    // T *dot_result_h_first[ngpu];
     long long *batchCount_gpu;
     //  potrf used
     int *d_info[ngpu];
@@ -117,7 +107,6 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     // used for the store the memory of offsets for mu and sigma
     // or, you could say that this is correction term
     T *d_A_offset_vector[ngpu], *d_mu_offset_vector[ngpu];
-    // T *d_C_copy[ngpu];
 
     // time 
     double whole_time = 0;
@@ -136,15 +125,6 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
         check_error(cudaDeviceSynchronize());
         check_error(cudaGetLastError());
     }
-
-    // /*
-    // seed for location generation
-    // */
-    // int seed[batchCount];
-    // for (int i = 0; i < batchCount; i++)
-    // {
-    //     seed[i] = i + 1;
-    // }
 
     M = opts.msize[0];
     N = opts.nsize[0];
@@ -189,20 +169,6 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     }else{
         batchCount_gpu[0] = batchCount / ngpu;
     }
-    // for (int g = 0; g < ngpu; g++){
-    //     if (batchCount % ngpu != 0){
-    //         if (g == (ngpu - 1)){
-    //             // last one contain the rests
-    //             batchCount_gpu[g] = batchCount / ngpu + batchCount % ngpu;
-    //         }else{
-    //             // the rest has the same 
-    //             batchCount_gpu[g] = batchCount / ngpu;
-    //         }
-    //         // fprintf(stderr, "batchCount_gpu[g]: %d \n", batchCount_gpu[g]);
-    //     }else{
-    //         batchCount_gpu[g] = batchCount / ngpu;
-    //     }
-    // }
     
 
     // Vecchia config for strided access
@@ -257,7 +223,7 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     if (opts.perf == 1){
         locations = GenerateXYLoc(opts.num_loc / opts.p, 1); // 1 is the random seed
         // for(int i = 0; i < opts.num_loc; i++) h_C_data[i] = (T) rand()/(T)RAND_MAX;
-        for(int i = 0; i < opts.num_loc; i++) h_C_data[i] = 0.0;
+        for(int i = 0; i < opts.num_loc; i++) h_C_data[i] = 3.0;
         // Xrand_matrix(Cm, Cn * batchCount, h_C, ldc);
         // printLocations(opts.num_loc, locations);
         // printVectorCPU(opts.num_loc, h_C, 1, 1);
@@ -357,15 +323,6 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
         }
     }
     // printLocations(cs * batchCount, locations_con);
-    // // true parameter
-    // TESTING_MALLOC_CPU(localtheta, T, opts.num_params); // no nugget effect
-    // localtheta[0] = opts.sigma;
-    // localtheta[1] = opts.beta;
-    // localtheta[2] = opts.nu;
-    // TESTING_MALLOC_CPU(localtheta_initial, T, opts.num_params); // no nugget effect
-    // localtheta_initial[0] = 0.01;
-    // localtheta_initial[1] = 0.01;
-    // localtheta_initial[2] = 0.01;
 
     // prepare these for llh_Xvecchia_batch
     data.M = M;
@@ -390,30 +347,19 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     data.batchCount = batchCount;
     data.bs = bs;
     data.cs = cs;
-    // int *h_M, *h_N,
-    //     *d_M[ngpu], *d_N[ngpu];
     data.h_A = h_A;
     data.h_C = h_C;
     data.h_C_data = h_C_data;
     // // no nugget
-    // data.localtheta = localtheta;
     data.locations = locations;
     // vecchia offset
     data.h_A_conditioning = h_A_conditioning;
     data.h_A_cross = h_A_cross;
     data.h_C_conditioning = h_C_conditioning;
-    // data.h_A_offset_matrix = h_A_offset_matrix;
-    // data.h_mu_offset_matrix = h_mu_offset_matrix;
     data.h_A_offset_vector = h_A_offset_vector;
     data.h_mu_offset_vector = h_mu_offset_vector;
 
     // opts
-    // lapack flags
-    // data.uplo = opts.uplo;
-    // data.transA = opts.transA;
-    // data.transB = opts.transB;
-    // data.side = opts.side;
-    // data.diag = opts.diag;
     data.sigma = opts.sigma;
     data.beta = opts.beta;
     data.nu = opts.nu;
@@ -435,10 +381,6 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
         data.kblas_handle[g] = &(kblas_handle[g]);
 
         data.d_C[g] = d_C[g];
-        // data.d_A_array[g] = d_A_array[g];
-        // data.d_C_array[g] = d_C_array[g];
-        // data.d_ldda[g] = d_ldda[g];
-        // data.d_lddc[g] = d_lddc[g];
         data.dot_result_h[g] = dot_result_h[g];
         data.logdet_result_h[g] = logdet_result_h[g];
         data.d_info[g] = d_info[g];
@@ -447,7 +389,6 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
         data.d_C_conditioning[g] = d_C_conditioning[g];
         data.d_A_offset_vector[g] = d_A_offset_vector[g];
         data.d_mu_offset_vector[g] = d_mu_offset_vector[g];
-        // data.d_C_copy[g] = d_C_copy[g];
         data.devices[g] = opts.devices[g];
         data.batchCount_gpu[g] = batchCount_gpu[g];
     }
@@ -519,37 +460,16 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     // independent
     cudaFreeHost(h_A);
     cudaFreeHost(h_C);
-    // if (nonUniform)
-    // {
-    //     free(h_M);
-    //     free(h_N);
-    // }
     for (int g = 0; g < ngpu; g++)
     {
         check_error(cudaSetDevice(opts.devices[g]));
         check_error(cudaFree(d_C[g]));
-        // if (!strided)
-        // {
-        //     check_error(cudaFree(d_A_array[g]));
-        //     check_error(cudaFree(d_C_array[g]));
-        // }
-        // if (nonUniform)
-        // {
-        //     check_error(cudaFree(d_M[g]));
-        //     check_error(cudaFree(d_N[g]));
-        //     check_error(cudaFree(d_ldda[g]));
-        //     check_error(cudaFree(d_lddc[g]));
-        // }
     }
 
     for (int g=0; g < ngpu; g++)
     {
         free(dot_result_h[g]);
         free(logdet_result_h[g]);
-        // if (g ==0){
-        //     free(dot_result_h_first[0]);
-        //     free(logdet_result_h_first[0]);
-        // }
     }
 
     for (int g = 0; g < ngpu; g++)

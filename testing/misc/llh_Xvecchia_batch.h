@@ -297,7 +297,6 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
                                 data->h_mu_offset_vector + _count, 1, 
                                 kblasGetStream(*(data->kblas_handle[g])));
 
-        // _mat_bit_count += data->batchCount_gpu[g]*data->batchCount_gpu[g];
         check_error(cudaDeviceSynchronize()); // TODO sync with streams instead
         check_error(cudaGetLastError());
     }
@@ -321,21 +320,13 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
     core_Xlogdet<T>(data->d_A_conditioning[0], 
                 data->cs, data->lddacon,
                 &(data->logdet_result_h[0][0]));
-    // data->dot_result_h[0][0] = data->h_mu_offset_matrix[0];
     data->dot_result_h[0][0] = data->h_mu_offset_vector[0];
 
     // scalar vecchia approximation
-    // int _sum_batchcmat = 0;
     for (int g = 0; g < data->ngpu; g++)
     {   
         if (g==0){
             for (int i=1; i < data->batchCount_gpu[g]; i++){
-                // data->h_C[i] -= data->h_mu_offset_matrix[_sum_batchcmat + i + i * data->batchCount_gpu[g]]; 
-                // // the first is no meaning 
-                // data->h_A[_sum_batchcvec + i] -= data->h_A_offset_matrix[_sum_batchcmat + i + i * data->batchCount_gpu[g]]; 
-                // // llhi calulation
-                // data->dot_result_h[g][i] = data->h_C[_sum_batchcvec + i] * data->h_C[_sum_batchcvec + i] / data->h_A[_sum_batchcvec + i];
-                // data->logdet_result_h[g][i] = log(data->h_A[_sum_batchcvec + i] );
                 // correction
                 data->h_C[i] -= data->h_mu_offset_vector[i]; 
                 data->h_A[i] -= data->h_A_offset_vector[i]; 
@@ -348,12 +339,6 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
             int _sum_batchcvec = 0;
             for (int j=0; j < g; j++) {_sum_batchcvec += data->batchCount_gpu[j];}
             for (int i=0; i < data->batchCount_gpu[g]; i++){
-                // data->h_C[_sum_batchcvec + i] -= data->h_mu_offset_matrix[_sum_batchcmat + i + i * data->batchCount_gpu[g]]; 
-                // // the first is no meaning 
-                // data->h_A[_sum_batchcvec + i] -= data->h_A_offset_matrix[_sum_batchcmat + i + i * data->batchCount_gpu[g]]; 
-                // // llhi calulation
-                // data->dot_result_h[g][i] = data->h_C[_sum_batchcvec + i] * data->h_C[_sum_batchcvec + i] / data->h_A[_sum_batchcvec + i];
-                // data->logdet_result_h[g][i] = log(data->h_A[_sum_batchcvec + i] );
                 data->h_C[_sum_batchcvec + i] -= data->h_mu_offset_vector[_sum_batchcvec + i]; 
                 // the first is no meaning 
                 data->h_A[_sum_batchcvec + i] -= data->h_A_offset_vector[_sum_batchcvec + i]; 
@@ -362,10 +347,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
                 data->logdet_result_h[g][i] = log(data->h_A[_sum_batchcvec + i] );
             }
         }
-        // _sum_batchcvec += data->batchCount_gpu[g];
-        // _sum_batchcmat += data->batchCount_gpu[g] * data->batchCount_gpu[g];
     }
-    // time = get_elapsed_time(curStream);
     // printf("-----------------------------------------\n");
     for (int g = 0; g < data->ngpu; g++)
     {   
