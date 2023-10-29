@@ -1,12 +1,26 @@
 #!/bin/bash
 
-N=6400
+N=180000
 Nbs=1
-Ncs=30
-echo "================ Morton ordering ========================"
-# used for full likelihood
-./bin/test_dvecchia_batch -N $Nbs:1 -s --kernel 1 --num_loc $N --omp_threads 1 --perf --vecchia_cs $Ncs --knn
 
-echo "================ Random ordering ========================"
-# used for full likelihood
-./bin/test_dvecchia_batch -N $Nbs:1 -s --kernel 1 --num_loc $N --omp_threads 1 --perf --vecchia_cs $Ncs --knn --randomordering
+############# morton ordering ###############
+for Ncs in 10 30 60 90 120
+do
+./bin/test_dvecchia_batch -N $Nbs:1 -s --kernel 1 --num_loc $N --omp_threads 40 --perf --vecchia_cs $Ncs --knn
+done
+
+for Ncs in 150 
+do
+./bin/test_dvecchia_batch -N $Nbs:1 -s --kernel 1 --num_loc $N --omp_threads 40 --perf --vecchia_cs $Ncs --knn --ngpu 2
+done
+
+############# random ordering ###############
+for Ncs in 10 30 60 90 120
+do
+./bin/test_dvecchia_batch -N $Nbs:1 -s --kernel 1 --num_loc $N --omp_threads 40 --perf --vecchia_cs $Ncs --knn --randomordering
+done 
+
+for Ncs in 150 
+do
+./bin/test_dvecchia_batch -N $Nbs:1 -s --kernel 1 --num_loc $N --omp_threads 40 --perf --vecchia_cs $Ncs --knn --ngpu 2 --randomordering
+done

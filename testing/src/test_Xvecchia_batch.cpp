@@ -65,7 +65,7 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     int ngpu = opts.ngpu;
     int nonUniform = opts.nonUniform;
     
-    long long batchCount;
+    size_t batchCount;
 
     // int nruns = opts.nruns;
     // BLAS language, 
@@ -86,7 +86,7 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     T *d_C[ngpu];
     T *dot_result_h[ngpu];
     T *logdet_result_h[ngpu];
-    long long *batchCount_gpu;
+    size_t batchCount_gpu[ngpu];
     //  potrf used
     int *d_info[ngpu];
     location *locations;

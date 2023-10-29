@@ -52,8 +52,8 @@ typedef struct llh_data {
     
 
 
-    long long batchCount_gpu[NGPU_MAX_NUM];
-    long long batchCount;
+    size_t batchCount_gpu[NGPU_MAX_NUM];
+    size_t batchCount;
 
     // lapack flags
 	char uplo;

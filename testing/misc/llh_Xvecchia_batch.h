@@ -148,10 +148,8 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
         check_error(cudaSetDevice(data->devices[g]));
         if (data->strided)
         {   
-            // data->Acon*2 instead of data->Acon is because for some cases, 
-            // like 320/20 combination, 320 batchszie 20 batch count, cannot 
-            // be allocated enough memory. But the reason is unclear now.
-            kblas_potrf_batch_strided_wsquery(*(data->kblas_handle[g]), data->cs, data->batchCount_gpu[g]);
+            // *3 because of unstable of wsquery
+            kblas_potrf_batch_strided_wsquery(*(data->kblas_handle[g]), data->Acon, data->batchCount_gpu[g] * 3);
             kblas_trsm_batch_strided_wsquery(*(data->kblas_handle[g]), 'L', data->lddccon, data->Cn, data->batchCount_gpu[g]);
             kblas_trsm_batch_strided_wsquery(*(data->kblas_handle[g]), 'L', data->lddccon, data->Cn, data->batchCount_gpu[g]);
         }
@@ -185,7 +183,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
         // printf("[info] Starting Cholesky decomposition. \n");
         if (data->strided)
         {
-            check_kblas_error(kblas_potrf_batch(*(data->kblas_handle[g]),
+            check_kblas_error(kblasXpotrf_batch_strided(*(data->kblas_handle[g]),
                                                 'L', data->Acon,
                                                 data->d_A_conditioning[g], data->lddacon, data->Acon * data->lddacon,
                                                 data->batchCount_gpu[g],
