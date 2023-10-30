@@ -223,7 +223,7 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     if (opts.perf == 1){
         locations = GenerateXYLoc(opts.num_loc / opts.p, 1); // 1 is the random seed
         // for(int i = 0; i < opts.num_loc; i++) h_C_data[i] = (T) rand()/(T)RAND_MAX;
-        for(int i = 0; i < opts.num_loc; i++) h_C_data[i] = 3.0;
+        for(int i = 0; i < opts.num_loc; i++) h_C_data[i] = 0.0;
         // Xrand_matrix(Cm, Cn * batchCount, h_C, ldc);
         // printLocations(opts.num_loc, locations);
         // printVectorCPU(opts.num_loc, h_C, 1, 1);
