@@ -71,6 +71,7 @@ static uint32_t Compact1By1(uint32_t x)
     return x;
 }
 
+
 static uint32_t EncodeMorton2(uint32_t x, uint32_t y)
 //! Encode two inputs into one
 {
@@ -105,6 +106,10 @@ static int compare_uint32(const void *a, const void *b)
     return 1;
 }
 
+/********************************************************************/
+/*********************Ordering*****************************/
+/*******************************************************************/
+
 
 static void zsort_locations(int n, location *locations)
 //! Sort in Morton order (input points must be in [0;1]x[0;1] square])
@@ -130,8 +135,49 @@ static void zsort_locations(int n, location *locations)
     }
 }
 
+struct comb { // location and measure
+    uint32_t z;
+    double w;
+};
+
+static int cmpfunc_loc (const void * a, const void * b) {
+    struct comb _a = *(const struct comb *)a;
+    struct comb _b = *(const struct comb *)b;
+    if(_a.z < _b.z) return -1;
+    if(_a.z == _b.z) return 0;
+    return 1;
+}
+
+static void zsort_reordering(int n, location * locations, double * w)
+//! Sort in Morton order (input points must be in [0;1]x[0;1] square])
+{
+    int i;
+    int n_measurement = 1;
+    uint16_t x, y;
+    struct comb *dat = (struct comb *) malloc (n * n_measurement * sizeof(struct comb));
+    // Encode data into vector z
+    for(i = 0; i < n; i++)
+    {
+        x = (uint16_t)(locations->x[i]*(double)UINT16_MAX +.5);
+        y = (uint16_t)(locations->y[i]*(double)UINT16_MAX +.5);
+        dat[i].z = EncodeMorton2(x, y);
+        dat[i].w = w[i];
+    }
+    // Sort vector z
+    qsort(dat, n, sizeof(struct comb), cmpfunc_loc);
+    // Decode data from vector z
+    for(i = 0; i < n; i++)
+    {
+        x = DecodeMorton2X(dat[i].z);
+        y = DecodeMorton2Y(dat[i].z);
+        locations->x[i] = (double)x/(double)UINT16_MAX;
+        locations->y[i] = (double)y/(double)UINT16_MAX;
+        w[i] = dat[i].w;
+    }
+}
+
 // random ordering
-static void random_locations(int size, location* loc, double* h_C) {
+static void random_reordering(int size, location* loc, double* h_C) {
     int your_seed_value = 42; // Set your desired seed value
 
     srand(your_seed_value);
@@ -156,6 +202,10 @@ static void random_locations(int size, location* loc, double* h_C) {
 
     }
 }
+
+/********************************************************************/
+/*********************Covariance function*****************************/
+/*******************************************************************/
 
 //Generate the covariance matrix.
 void core_scmg(float *A, int m, int n,

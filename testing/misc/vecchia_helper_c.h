@@ -22,7 +22,7 @@ typedef struct llh_data {
     // TBD for non uniform 
     // int max_M, max_N;
     // int ISEED[4] = {0, 0, 0, 1};
-    // int seed = 0;
+    int seed;
 
     double *h_A, *h_C;
     double *d_C[NGPU_MAX_NUM];
@@ -81,7 +81,6 @@ typedef struct llh_data {
     int kernel;
     int num_params;
     int num_loc;
-    int zvecs;
 
     //vecchia time monitoring
     double vecchia_time_total;

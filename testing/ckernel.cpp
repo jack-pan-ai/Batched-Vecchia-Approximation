@@ -47,7 +47,7 @@ location *GenerateXYLoc(int n, int seed)
     //initalization
     int i = 0, index = 0, j = 0;
     srand(seed);
-    location *locations = (location *) malloc(sizeof(location));
+    location *locations = (location *) malloc(sizeof(location *));
     //Allocate memory
     locations->x = (double* ) malloc(n * sizeof(double));
     locations->y = (double* ) malloc(n * sizeof(double));
@@ -58,16 +58,17 @@ location *GenerateXYLoc(int n, int seed)
     int *grid = (int *) calloc((int) sqrtn, sizeof(int));
 
     for (i = 0; i < sqrtn; i++) {
-        grid[i] = i + 0.0;
+        grid[i] = i + 1;
+		// grid[i] = i + 0.0; // regular
     }
 
     for (i = 0; i < sqrtn && index < n; i++)
         for (j = 0; j < sqrtn && index < n; j++) {
-            // locations->x[index] = (grid[i] - 0.5 + uniform_distribution(-0.4, 0.4)) / sqrtn;
-            // locations->y[index] = (grid[j] - 0.5 + uniform_distribution(-0.4, 0.4)) / sqrtn;
+            locations->x[index] = (grid[i] - 0.5 + uniform_distribution(-0.4, 0.4)) / sqrtn;
+            locations->y[index] = (grid[j] - 0.5 + uniform_distribution(-0.4, 0.4)) / sqrtn;
 			// grid (x, y)
-			locations->x[index] = (grid[i] + 1.0) / sqrtn;
-            locations->y[index] = (grid[j] + 1.0) / sqrtn;
+			// locations->x[index] = (grid[i] + 1.0) / sqrtn;
+            // locations->y[index] = (grid[j] + 1.0) / sqrtn;
             index++;
         }
     free(grid);
@@ -1050,24 +1051,17 @@ void core_dcmg(double* A, int m, int n,
 	gsl_set_error_handler_off();
 }
 
-void core_dcmg_exp(double* A, int m, int n,
+void core_dcmg_matern_135(double* A, int m, int n,
 		// int m0, int n0, 
 		location* l1,
 		location* l2, const double* localtheta, int distance_metric) {
 
 	int i, j;
-	// int i0 = m0;
-	// int j0 = n0;
 	int i0 = 0;
 	int j0 = 0;
 	double x0, y0, z0;
 	double expr = 0.0;
-	double con = 0.0;
 	double sigma_square = localtheta[0];// * localtheta[0];
-
-	// con = pow(2, (0.5 - 1)) * tgamma(0.5);
-	// con = 1.0 / con;
-	// con = sigma_square * con;
 	for (i = 0; i < m; i++) {
 		j0 = 0;
 		for (j = 0; j < n; j++) {
@@ -1076,9 +1070,6 @@ void core_dcmg_exp(double* A, int m, int n,
 			// printf("%lf \n", expr);
 			if (expr == 0)
 				A[i + j * m] = sigma_square /*+ 1e-4*/;
-			else
-				A[i + j * m] = sigma_square * pow(expr, 0.5);
-					// * gsl_sf_bessel_Knu(0.5, expr); // Matern Function
 			j0++;
 			// printf("%lf\n", A[i + j * m]);
 		}

@@ -84,18 +84,17 @@ void DgpuDotProducts_Strided(double *a, double *b,
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Covariance matrix generation - strided version
+// Covariance matrix generation 1/2 3/2 5/2 - strided version
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-__global__ void Dcmg_powexp_strided_kernel(
+__global__ void Dcmg_matern12_strided_kernel(
         double *A, 
         int m, int n, int lddm,
         // int m0, int n0, 
         double* l1_x_cuda, double* l1_y_cuda, 
         double* l2_x_cuda, double* l2_y_cuda,
         double localtheta0, double localtheta1, 
-        double localtheta2, int distance_metric)
-    //! Power-Exponential Kernel
+        int distance_metric)
     /*!
      * Returns covariance matrix tile using the aforementioned kernel.
      * @param[in] A: 1D array which saves the matrix entries by column.
@@ -117,25 +116,98 @@ __global__ void Dcmg_powexp_strided_kernel(
 
     if(idx >= m || idy >= n) return;
 
-    double expr  = 0.0;
+    double scaled_distance  = 0.0;
     // double expr1 = 0.0;
     double sigma_square = localtheta0;
-    expr = sqrt(
+    scaled_distance = sqrt(
                 pow((l2_x_cuda[idy] - l1_x_cuda[idx]), 2) +
                 pow((l2_y_cuda[idy] - l1_y_cuda[idx]), 2)
-            );
-    // expr1 = pow(expr, localtheta2);
-    if(expr == 0){
-        A[idx + idy * lddm] = sigma_square /*+ 1e-4*/;
-    }
-    else{
-        A[idx + idy * lddm] = sigma_square *  exp(-(expr/localtheta1)); // power-exp kernel
-    }
+            ) / localtheta1;
+
+    A[idx + idy * lddm] = sigma_square *  
+                    exp(-(scaled_distance)); // power-exp kernel
+    // }
     
 
 }
 
-void cudaDcmg_powexp_strided( 
+__global__ void Dcmg_matern32_strided_kernel(
+        double *A, 
+        int m, int n, int lddm,
+        // int m0, int n0, 
+        double* l1_x_cuda, double* l1_y_cuda, 
+        double* l2_x_cuda, double* l2_y_cuda,
+        double localtheta0, double localtheta1, 
+        int distance_metric)
+{
+   int idx = blockIdx.x * blockDim.x + threadIdx.x;
+   int idy = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if(idx >= m || idy >= n) return;
+
+    double scaled_distance = 0.0;
+    // double expr1 = 0.0;
+    double sigma_square = localtheta0;
+    scaled_distance = sqrt(
+                pow((l2_x_cuda[idy] - l1_x_cuda[idx]), 2) +
+                pow((l2_y_cuda[idy] - l1_y_cuda[idx]), 2)
+            ) / localtheta1;
+    A[idx + idy * lddm] = sigma_square * 
+                (1 + scaled_distance) *
+                exp(-scaled_distance);
+}
+
+__global__ void Dcmg_matern52_strided_kernel(
+        double *A, 
+        int m, int n, int lddm,
+        double* l1_x_cuda, double* l1_y_cuda, 
+        double* l2_x_cuda, double* l2_y_cuda,
+        double localtheta0, double localtheta1, 
+        int distance_metric)
+{
+   int idx = blockIdx.x * blockDim.x + threadIdx.x;
+   int idy = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if(idx >= m || idy >= lddm) return;
+
+    double scaled_distance  = 0.0;
+    double sigma_square = localtheta0;
+    scaled_distance = sqrt(
+                pow((l2_x_cuda[idy] - l1_x_cuda[idx]), 2) +
+                pow((l2_y_cuda[idy] - l1_y_cuda[idx]), 2)
+            ) / localtheta1;
+    A[idx + idy * lddm] = sigma_square * 
+            (1 + scaled_distance + pow(scaled_distance, 2) / 3) * 
+            exp(-scaled_distance); 
+}
+
+
+__global__ void Dcmg_powexp_strided_kernel(
+        double *A, 
+        int m, int n, int lddm,
+        // int m0, int n0, 
+        double* l1_x_cuda, double* l1_y_cuda, 
+        double* l2_x_cuda, double* l2_y_cuda,
+        double localtheta0, double localtheta1, 
+        double localtheta2, 
+        int distance_metric)
+{
+   int idx = blockIdx.x * blockDim.x + threadIdx.x;
+   int idy = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if(idx >= m || idy >= n) return;
+
+    double expr  = 0.0;
+    double expr1 = 0.0;
+    double sigma_square = localtheta0;
+    expr = sqrt(pow((l2_x_cuda[idy] - l1_x_cuda[idx]), 2) +
+            pow((l2_y_cuda[idy] - l1_y_cuda[idx]), 2));
+    expr1 = pow(expr, localtheta2);
+    A[idx + idy * lddm] = sigma_square *  exp(-(expr1/localtheta1)); 
+}
+
+
+void cudaDcmg_matern135_2_strided( 
         double *A, 
         int m, int n, int lddm,
         // int m0, int n0, 
@@ -144,15 +216,67 @@ void cudaDcmg_powexp_strided(
         const double *localtheta, int distance_metric, 
         cudaStream_t stream){
 
+    // Matern function with fraction 1/2, 3/2, 5/2
+
     int nBlockx = (m + CHUNKSIZE - 1)/CHUNKSIZE;
     int nBlocky = (n + CHUNKSIZE - 1)/CHUNKSIZE;
     dim3 dimBlock(CHUNKSIZE,CHUNKSIZE);
     dim3 dimGrid(nBlockx,nBlocky);
 
+    if (localtheta[2] == 0.5){
+        Dcmg_matern12_strided_kernel<<<dimGrid, dimBlock, 0, stream>>>(
+            A, m, n, lddm, 
+            l1_x_cuda, l1_y_cuda, 
+            l2_x_cuda, l2_y_cuda, 
+            localtheta[0], localtheta[1], 
+            distance_metric
+        );
+    }else if (localtheta[2] == 1.5){
+        Dcmg_matern32_strided_kernel<<<dimGrid, dimBlock, 0, stream>>>(
+            A, m, n, lddm, 
+            l1_x_cuda, l1_y_cuda, 
+            l2_x_cuda, l2_y_cuda, 
+            localtheta[0], localtheta[1], 
+            distance_metric
+        );
+    }else if (localtheta[2] == 2.5){
+        Dcmg_matern52_strided_kernel<<<dimGrid, dimBlock, 0, stream>>>(
+            A, m, n, lddm, 
+            l1_x_cuda, l1_y_cuda, 
+            l2_x_cuda, l2_y_cuda, 
+            localtheta[0], localtheta[1], 
+            distance_metric
+        );
+    }else{
+        fprintf(stderr, "Other smoothness setting are still developing. \n");
+        exit(0);
+    }
+    
+}
+
+
+void cudaDcmg_powexp_strided( 
+        double *A, 
+        int m, int n, 
+        int lddm,
+        // int m0, int n0, 
+        double* l1_x_cuda, double* l1_y_cuda, 
+        double* l2_x_cuda, double* l2_y_cuda,
+        const double *localtheta, int distance_metric, 
+        cudaStream_t stream){
+
+    int nBlockx= (m + CHUNKSIZE - 1) / CHUNKSIZE;
+    int nBlocky= (n + CHUNKSIZE - 1) / CHUNKSIZE;
+    dim3 dimBlock(CHUNKSIZE, CHUNKSIZE);
+    dim3 dimGrid(nBlockx, nBlocky);
+
     Dcmg_powexp_strided_kernel<<<dimGrid, dimBlock, 0, stream>>>(
         A, m, n, lddm, 
         l1_x_cuda, l1_y_cuda, 
         l2_x_cuda, l2_y_cuda, 
-        localtheta[0], localtheta[1],localtheta[2], 
+        localtheta[0], localtheta[1], 
+        localtheta[2],
         distance_metric);
+
+    // cudaStreamSynchronize(stream);
 }

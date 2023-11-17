@@ -18,3 +18,8 @@ testing/dat1_base_40k/synData/*
 
 #base
 testing/dat1_base_6k/
+
+# bash file
+testing/test.sh
+testing/fig
+testing/log

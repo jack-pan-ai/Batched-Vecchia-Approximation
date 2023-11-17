@@ -6,21 +6,22 @@
 #include <iostream>
 #include <sys/stat.h>
 #include <string>
+#include <iomanip>
 
 
-location *loadXYcsv(const std::string& filename, int n)
+location *loadXYcsv(const std::string& file_path, int n)
 {
     // Check if the file exists by trying to open it
-    std::ifstream testFile(filename);
+    std::ifstream testFile(file_path);
     if (!testFile) {
-        std::cerr << "Error: File " << filename << " does not exist\n";
+        std::cerr << "Error: File " << file_path << " does not exist\n";
         exit(0);
     }
     location *loc = (location *) malloc(sizeof(location));
     loc->x = (double* ) malloc(n * sizeof(double));
     loc->y = (double* ) malloc(n * sizeof(double));
     loc->z = NULL;
-    std::ifstream file(filename);
+    std::ifstream file(file_path);
     std::string line;
     int i = 0;
     while (std::getline(file, line))
@@ -40,16 +41,16 @@ location *loadXYcsv(const std::string& filename, int n)
 }
 
 template <class T>
-void loadObscsv(const std::string& filename, int n, T* obs)
+void loadObscsv(const std::string& file_path, int n, T* obs)
 {
     // Check if the file exists by trying to open it
-    std::ifstream testFile(filename);
+    std::ifstream testFile(file_path);
     if (!testFile) {
-        std::cerr << "Error: File " << filename << " does not exist\n";
+        std::cerr << "Error: File " << file_path << " does not exist\n";
         exit(0);
     }
     // T* obs = (double* ) malloc(n * sizeof(double));
-    std::ifstream file(filename);
+    std::ifstream file(file_path);
     std::string line;
     int i = 0;
     while (std::getline(file, line)) {
@@ -62,103 +63,73 @@ void loadObscsv(const std::string& filename, int n, T* obs)
     }
     file.close();
 }
-template <class T>
-void saveLogFileParams(int iter, const double* theta, T llh,
-                        T time_llh, T time_Xcmg, int num_loc, 
-                        int batchsize, int zvecs, int p, int vecchia_cs)
-{
-    // zvecs is the zvecs th replicate
-    std::string filename = "./data/batchsize_" + std::to_string(batchsize) \
-                        + "_" + std::to_string(vecchia_cs) \
-                        +"/params_" + std::to_string(num_loc) + '_' \
-                        + std::to_string(batchsize) + '_' + std::to_string(zvecs) + ".csv";
-    // Open the log file in append mode
-    std::ofstream file(filename, std::ios::app); // open file in append mode
-    if (!file.is_open()) // check if file opened successfully
-    {
-        std::cerr << "Warning: unable to open file " << filename << " for saving intermediate information." << std::endl;
-        return;
-    }
-    
-    std::ostringstream oss;
-    if (p == 1){
-        oss << iter << "," << theta[0] << "," << theta[1] << "," << theta[2] << "," << llh << "," << time_llh << "," << time_Xcmg  << std::endl; // create a comma-separated string of the values
-    }else if (p == 2){
-        oss << iter << "," << theta[0] << "," << theta[1] << "," << theta[2] << theta[3] << "," << theta[4] << "," << theta[5] << "," << llh << "," << time_llh << "," << time_Xcmg  << std::endl; // create a comma-separated string of the values
-    }
-    file << oss.str(); // write the string to the file
-    file.close(); // close the file
-}
 
-void createLogFileParams(int num_loc, int batchsize, int zvecs, int p, int vecchia_cs)
-{
-    // zvecs is the zvecs th replicate
-    std::string filename = "./data/batchsize_" + std::to_string(batchsize) \
-                        + "_" + std::to_string(vecchia_cs) \
-                        +"/params_" + std::to_string(num_loc) + '_' \
-                        + std::to_string(batchsize) + '_' + std::to_string(zvecs) + ".csv";
-    std::ofstream file(filename, std::ios::app); // open file in append mode
-    if (!file.is_open()) // check if file opened successfully
-    {
-        std::cerr << "Unable to open file " << filename << " for writing." << std::endl;
-        return;
-    }
-    
-    if (file.tellp() == 0) // if the file is empty, write the headers
-    {   
-        if (p == 1){ // univariate matern stationary
-            file << "iteration,sigma,range,smoothness,llh,time_llh,time_Xcmg" << std::endl;
-        }else if (p == 2){
-            file << "iteration,sigma1,sigma2,range,smoothness1,smoothness2,beta,llh,time_llh,time_Xcmg" << std::endl;
-        }else{
-            printf("It is developing now");
-            exit(0);
+
+int createDirectoryIfNotExists(const char *path) {
+    struct stat st;
+    if (stat(path, &st) == 0) {
+        if (S_ISDIR(st.st_mode)) {
+            return 0; // Directory already exists
+        } else {
+            return -1; // Path exists but is not a directory
+        }
+    } else {
+        if (mkdir(path, 0777) == 0) {
+            return 0; // Directory created successfully
+        } else {
+            return -1; // Failed to create the directory
         }
     }
-
-    file.close(); // close the file
 }
 
-template <class T>
-void saveLogFileSum(int iterations, std::vector<T> theta, T llk, 
-                    double time, int batchsize, int num_loc, 
-                    int zvecs, int vecchia_cs) {
-    // zvecs is the zvecs th replicate
-    std::string filename = "./data/batchsize_" + std::to_string(batchsize) \
-                        + "_" + std::to_string(vecchia_cs) \
-                        + "/sum_" + std::to_string(num_loc) + '_' \
-                        + std::to_string(batchsize) + '_' + std::to_string(zvecs) + ".csv";
+void createLogFile(kblas_opts &opts)
+{
+    const char *log_dir = "./log";
+
+    int result = createDirectoryIfNotExists(log_dir);
+
+    if (result == 0) {
+        printf("Directory exists or was created successfully.\n");
+    } else {
+        printf("Failed to create the directory.\n");
+    }
+}
+
+template<class T>
+void saveLogFileSum(int iterations, std::vector<T> theta, double max_llh, double whole_time,  kblas_opts &opts) {
+    
+    // first to create a folder
+    createLogFile(opts);
+
+    std::string file_path = "./log/locs_" + std::to_string(opts.num_loc) + "_" \
+                            + "cs_" + std::to_string(opts.vecchia_cs) + "_" \
+                            + "seed_" + std::to_string(opts.seed) + "_" \
+                            + "kernel_" + std::to_string(opts.sigma) + ":" \
+                                + std::to_string(opts.beta) + ":" \
+                                + std::to_string(opts.nu);
+    if (opts.mortonordering) file_path = file_path + "_morton";
+    else if (opts.randomordering) file_path = file_path + "_random";
+
     // Print the log message to the log file using printf
     printf("Total Number of Iterations = %d \n", iterations);
-    printf("Total Optimization Time = %lf secs \n", time);
-    if (theta.size() == 3){
-        printf("Model Parameters (Variance, range, smoothness): (%lf, %lf, %lf) -> Loglik: %lf \n",\
-                 theta[0], theta[1], theta[2], llk);
-        std::ofstream outfile(filename);
+    printf("Total Optimization Time = %lf secs \n", whole_time);
+    printf("Model Parameters (Variance, range, smoothness): (%lf, %lf, %lf) -> Loglik: %lf \n",\
+                theta[0], theta[1], theta[2], max_llh);
+    std::ofstream outfile(file_path);
 
-        // Write the headers for the CSV file
-        outfile << "Iterations, Time, variance, range, smoothness, log-likelihood" << std::endl;
-        // Write the log data to the CSV file
-        outfile << iterations << ", " << time << ", " << theta[0] << ", " << theta[1] << ", " \
-                << theta[2] << ", " << llk << std::endl;
-
-        // Close the file
-        outfile.close();
+    // Write the headers for the CSV file
+    outfile << "Iterations, variance, range, smoothness, log-likelihood, ordering" << std::endl;
+    // Write the log data to the CSV file
+    if (opts.mortonordering){
+        outfile << iterations << ", " \
+                << theta[0] << ", " << theta[1] << ", " << theta[2] << ", " \
+                << std::setprecision(std::numeric_limits<double>::max_digits10) << max_llh << ", morton" << std::endl;
+    }else if (opts.randomordering)
+    {
+        outfile << iterations << ", " \
+                << theta[0] << ", " << theta[1] << ", " << theta[2] << ", " \
+                << std::setprecision(std::numeric_limits<double>::max_digits10) << max_llh << ", random" << std::endl;
     }
-    else if (theta.size() == 6){
-        printf("Model Parameters (Variance1, Variance2, range, smoothness1, smoothness2, beta): (%lf, %lf, %lf, %lf, %lf, %lf) -> Loglik: %lf \n", \
-                theta[0], theta[1], theta[2], theta[3], theta[4], theta[5], llk);
-                // Open the CSV file for writing
-        std::ofstream outfile(filename);
-
-        // Write the headers for the CSV file
-        outfile << "Iterations, Time, variance1, variance2, range, smoothness1, smoothness2, beta, log-likelihood" << std::endl;
-        // Write the log data to the CSV file
-        outfile << iterations << ", " << time << ", " << theta[0] << ", " << theta[1] << ", " \
-                << theta[2] << ", " << theta[3] << ", " << theta[4] << ", " << theta[5] << ", " \
-                << llk << std::endl;
-        // Close the file
-        outfile.close();
-    }
+    outfile.close();
 }
 #endif

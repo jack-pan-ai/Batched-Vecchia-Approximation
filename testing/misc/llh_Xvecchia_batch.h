@@ -31,22 +31,10 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
 
     // covariance matrix generation 
     // the first h_A is only for complement;
-    #pragma omp parallel for
+    // #pragma omp parallel for
     for (int i=1; i < data->batchCount; i++)
     {
-        // loc_batch: for example, p(y1|y2), the locations of y1 is the loc_batch
-        location* loc_batch= (location *) malloc(sizeof (location));
-        // h_A: \sigma_{11}
-        // the rest batched block
-        loc_batch->x = data->locations->x + data->cs + i * data->bs;
-        loc_batch->y = data->locations->y + data->cs + i * data->bs;
-        loc_batch->z = NULL;  
-        // printLocations(data->bs, loc_batch); 
-        core_dcmg_exp(data->h_A + i * data->bs * data->bs,
-                    data->bs, data->bs,
-                    loc_batch, loc_batch, 
-                    localtheta, data->distance_metric);  
-        free(loc_batch);
+        data->h_A[i] = localtheta[0];
     }
 
     ///*************** Covariance matrix generation on GPU *****************//
@@ -54,26 +42,51 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
     {
         check_error(cudaSetDevice(data->devices[g]));
         for (long long i = 0; i < data->batchCount_gpu[g]; i++){
-            cudaDcmg_powexp_strided( 
-                data->d_A_conditioning[g] + i * data->lddacon * data->Acon, 
-                data->cs, data->cs, data->lddacon,
-                // int m0, int n0, 
-                data->locations_con_xx_d[g] + i * data->cs, 
-                data->locations_con_yy_d[g] + i * data->cs,
-                data->locations_con_xx_d[g] + i * data->cs, 
-                data->locations_con_yy_d[g] + i * data->cs, 
-                localtheta, data->distance_metric,
-                kblasGetStream(*(data->kblas_handle[g])));
-            cudaDcmg_powexp_strided( 
-                data->d_A_cross[g] + i * data->lddacon * data->bs, 
-                data->Acon, data->bs, data->lddacon,
-                // int m0, int n0, 
-                data->locations_con_xx_d[g] + i * data->Acon, 
-                data->locations_con_yy_d[g] + i * data->Acon,
-                data->locations_xx_d[g] + i * data->bs, 
-                data->locations_yy_d[g] + i * data->bs, 
-                localtheta, data->distance_metric,
-                kblasGetStream(*(data->kblas_handle[g])));
+            if (data->kernel == 1){
+                // matern kernel with fixed nu
+                cudaDcmg_matern135_2_strided( 
+                    data->d_A_conditioning[g] + i * data->lddacon * data->Acon, 
+                    data->cs, data->cs, data->lddacon,
+                    // int m0, int n0, 
+                    data->locations_con_xx_d[g] + i * data->cs, 
+                    data->locations_con_yy_d[g] + i * data->cs,
+                    data->locations_con_xx_d[g] + i * data->cs, 
+                    data->locations_con_yy_d[g] + i * data->cs, 
+                    localtheta, data->distance_metric,
+                    kblasGetStream(*(data->kblas_handle[g])));
+                cudaDcmg_matern135_2_strided( 
+                    data->d_A_cross[g] + i * data->lddacon * data->bs, 
+                    data->Acon, data->bs, data->lddacon,
+                    // int m0, int n0, 
+                    data->locations_con_xx_d[g] + i * data->Acon, 
+                    data->locations_con_yy_d[g] + i * data->Acon,
+                    data->locations_xx_d[g] + i * data->bs, 
+                    data->locations_yy_d[g] + i * data->bs, 
+                    localtheta, data->distance_metric,
+                    kblasGetStream(*(data->kblas_handle[g])));
+            }else if (data->kernel == 2) {
+                // exponential power kernel
+                cudaDcmg_powexp_strided( 
+                    data->d_A_conditioning[g] + i * data->lddacon * data->Acon, 
+                    data->cs, data->cs, data->lddacon,
+                    // int m0, int n0, 
+                    data->locations_con_xx_d[g] + i * data->cs, 
+                    data->locations_con_yy_d[g] + i * data->cs,
+                    data->locations_con_xx_d[g] + i * data->cs, 
+                    data->locations_con_yy_d[g] + i * data->cs, 
+                    localtheta, data->distance_metric,
+                    kblasGetStream(*(data->kblas_handle[g])));
+                cudaDcmg_powexp_strided( 
+                    data->d_A_cross[g] + i * data->lddacon * data->bs, 
+                    data->Acon, data->bs, data->lddacon,
+                    // int m0, int n0, 
+                    data->locations_con_xx_d[g] + i * data->Acon, 
+                    data->locations_con_yy_d[g] + i * data->Acon,
+                    data->locations_xx_d[g] + i * data->bs, 
+                    data->locations_yy_d[g] + i * data->bs, 
+                    localtheta, data->distance_metric,
+                    kblasGetStream(*(data->kblas_handle[g])));
+            }
         }
         check_error(cudaDeviceSynchronize());
         check_error(cudaGetLastError());
@@ -81,19 +94,10 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
     // exit(0);
     // the first cs data->d_A_cross has to be treated carefully (replace with h_C_conditioning)
     // because we need its quadratic term
-    // check_cublas_error(cublasSetVectorAsync(data->cs, sizeof(T), 
-    //                             data->h_C_data, 1,
-    //                             data->d_A_cross[0], 1, 
-    //                             kblasGetStream(*(data->kblas_handle[0]))));
     check_error(cudaSetDevice(data->devices[0]));
     check_cublas_error(cublasSetVector(data->cs, sizeof(T), 
                                 data->h_C_data, 1,
                                 data->d_A_cross[0], 1));
-    // check_cublas_error(cublasSetMatrix(data->cs, 1, sizeof(T),
-    //                                         data->h_C_data,
-    //                                         data->ldccon, 
-    //                                         data->d_A_cross[0], 
-    //                                         data->lddccon));
     check_error(cudaDeviceSynchronize());
     check_error(cudaGetLastError());
     // memcpy(data->h_A_cross, data->h_C_data, sizeof(T) * data->cs);
@@ -398,16 +402,10 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
         fprintf(stderr, "==========================================================================================\n");
     }
     if (data->perf != 1){
-        saveLogFileParams(data->iterations, 
-                        localtheta, llk, 
-                        indep_time + vecchia_time_total, dcmg_time, 
-                        data->num_loc, data->M,
-                        data->zvecs, data->p,
-                        data->cs); // this is log_tags for write a file
-        if (data->kernel ==1){
+        if (data->kernel ==1 || data->kernel == 2){
             printf("%dth Model Parameters (Variance, range, smoothness): (%lf, %lf, %lf) -> Loglik: %lf \n", 
                 data->iterations, localtheta[0], localtheta[1], localtheta[2], llk); 
-        }else if (data->kernel ==2){
+        }else if (data->kernel ==3){
             printf("%dth Model Parameters (Variance1, Variance2, range, smoothness1, smoothness2, beta): (%lf, %lf, %lf, %lf, %lf, %lf) -> Loglik: %lf \n", 
                 data->iterations, localtheta[0], localtheta[1], localtheta[2], 
                 localtheta[3], localtheta[4], localtheta[5], llk); 
