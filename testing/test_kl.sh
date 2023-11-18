@@ -1,6 +1,7 @@
 #!/bin/bash
 
-N=180000
+# N=180000
+N=260000
 Nbs=1
 # Assuming your data is in a file called "data.txt"
 filename="params.txt"

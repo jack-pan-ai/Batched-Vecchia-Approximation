@@ -381,9 +381,17 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
     vecchia_time_total = vecchia_time_batch_potrf + vecchia_time_batch_trsm + vecchia_time_quadratic;  
     time_copy = time_copy_dh + time_copy_hd;
     if (data->perf == 1){
-        fprintf(stderr, "===================================Execution time (s)=======================================\n");
-        fprintf(stderr, "   Time total      Time dcmg      Copy(CPU->GPU)     BatchPOTRF    BatchTRSM   Quadratic      Independent\n"); 
-        fprintf(stderr, "   %8.6lf        %8.6lf        %8.6lf        %8.6lf      %8.6lf      %8.6lf       %8.6lf\n", 
+        std::string _file_path = "./log/perf_locs_" + std::to_string(data->num_loc) + "_" \
+                            + "cs_" + std::to_string(data->cs);
+        const char *file_path = _file_path.c_str();
+        FILE *_file = fopen(file_path, "w");
+        if (_file == NULL) {
+            perror("Error opening _file");
+            return 1; // Handle error as appropriate
+        }
+        fprintf(_file, "===================================Execution time (s)=======================================\n");
+        fprintf(_file, "   Time total      Time dcmg      Copy(CPU->GPU)     BatchPOTRF    BatchTRSM   Quadratic      Independent\n"); 
+        fprintf(_file, "   %8.6lf        %8.6lf        %8.6lf        %8.6lf      %8.6lf      %8.6lf       %8.6lf\n", 
                         dcmg_time + indep_time + vecchia_time_total + time_copy, 
                         dcmg_time, 
                         time_copy_hd,
@@ -391,15 +399,16 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
                         vecchia_time_batch_trsm, 
                         vecchia_time_quadratic,
                         indep_time);
-        fprintf(stderr, "=============================Computing performance (Gflops/s)===================================\n");
-        fprintf(stderr, "     Vecchia         BatchPOTRF         BatchTRSM       Quadratic\n");
-        fprintf(stderr, "   %8.2lf           %8.2lf        %8.2lf        %8.2lf  \n",
+        fprintf(_file, "=============================Computing performance (Gflops/s)===================================\n");
+        fprintf(_file, "     Vecchia         BatchPOTRF         BatchTRSM       Quadratic\n");
+        fprintf(_file, "   %8.2lf           %8.2lf        %8.2lf        %8.2lf  \n",
                         (gflops_batch_potrf + gflops_batch_trsm + gflops_quadratic)/(vecchia_time_batch_potrf + vecchia_time_batch_trsm + vecchia_time_quadratic),
                         gflops_batch_potrf/vecchia_time_batch_potrf, 
                         gflops_batch_trsm/vecchia_time_batch_trsm, 
                         gflops_quadratic/vecchia_time_quadratic);
-        // fprintf(stderr, "%lf ==============\n", llk);
-        fprintf(stderr, "==========================================================================================\n");
+        // fprintf(_file, "%lf ==============\n", llk);
+        fprintf(_file, "==========================================================================================\n");
+        fclose(_file);
     }
     if (data->perf != 1){
         if (data->kernel ==1 || data->kernel == 2){

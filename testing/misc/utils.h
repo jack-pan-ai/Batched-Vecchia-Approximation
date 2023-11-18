@@ -97,9 +97,6 @@ void createLogFile(kblas_opts &opts)
 
 template<class T>
 void saveLogFileSum(int iterations, std::vector<T> theta, double max_llh, double whole_time,  kblas_opts &opts) {
-    
-    // first to create a folder
-    createLogFile(opts);
 
     std::string file_path = "./log/locs_" + std::to_string(opts.num_loc) + "_" \
                             + "cs_" + std::to_string(opts.vecchia_cs) + "_" \

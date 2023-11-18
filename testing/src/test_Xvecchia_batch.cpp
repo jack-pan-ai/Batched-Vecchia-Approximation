@@ -137,6 +137,9 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
 
     fflush(stdout);
 
+    // first to create a folder to save the log information
+    createLogFile(opts);
+
     // Vecchia config
     lda = Am = M;
     An = M;
