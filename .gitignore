@@ -3,7 +3,7 @@ bin/
 .vscode/
 lib/libkblas-gpu.a
 test
-test.cpp
+test.*
 
 #ignore files in testing
 # testing/bin/
@@ -15,11 +15,18 @@ testing/extras/
 
 # dataset
 testing/dat1_base_40k/synData/*
+testing/wind/
 
 #base
 testing/dat1_base_6k/
 
 # bash file
-testing/test.sh
 testing/fig
 testing/log
+
+testing/soil_moist
+
+# test bash files
+testing/test_llh.sh
+testing/test_estimation.sh
+testing/test.sh

@@ -1,10 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
-// #include <cublas_v2.h>
+#include <cuda_runtime.h>
+#include <cublas_v2.h>
 
 #include "aux_operations.h"
 
 #define CHUNKSIZE 32
+#define PI (3.141592653589793)
+#define earthRadiusKm (6371.0)  
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // gpuDotProducts
@@ -200,12 +203,46 @@ __global__ void Dcmg_powexp_strided_kernel(
     double expr  = 0.0;
     double expr1 = 0.0;
     double sigma_square = localtheta0;
-    expr = sqrt(pow((l2_x_cuda[idy] - l1_x_cuda[idx]), 2) +
-            pow((l2_y_cuda[idy] - l1_y_cuda[idx]), 2));
+    expr = sqrt(
+        pow((l2_x_cuda[idy] - l1_x_cuda[idx]), 2) +
+        pow((l2_y_cuda[idy] - l1_y_cuda[idx]), 2)
+        );
     expr1 = pow(expr, localtheta2);
     A[idx + idy * lddm] = sigma_square *  exp(-(expr1/localtheta1)); 
 }
 
+
+__global__ void Dcmg_powexp_strided_kernel_earth_distance(
+        double *A, 
+        int m, int n, int lddm,
+        // int m0, int n0, 
+        double* l1_x_cuda, double* l1_y_cuda, 
+        double* l2_x_cuda, double* l2_y_cuda,
+        double localtheta0, double localtheta1, 
+        double localtheta2, 
+        int distance_metric)
+{
+   int idx = blockIdx.x * blockDim.x + threadIdx.x;
+   int idy = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if(idx >= m || idy >= n) return;
+
+    double expr  = 0.0;
+    double expr1 = 0.0;
+    double sigma_square = localtheta0;
+    // earth distance
+    double lat1r, lon1r, lat2r, lon2r, u, v;
+	lat1r = l1_x_cuda[idx] * PI / 180;
+	lon1r = l1_y_cuda[idx] * PI / 180;
+	lat2r = l2_x_cuda[idy] * PI / 180;
+	lon2r = l2_y_cuda[idy] * PI / 180;
+	u = sin((lat2r - lat1r) / 2.);
+	v = sin((lon2r - lon1r) / 2.);
+    expr = 2.0 * earthRadiusKm * asin(sqrt(u * u + cos(lat1r) * cos(lat2r) * v * v));
+
+    expr1 = pow(expr / 100., localtheta2); // /100 only used for the soil data
+    A[idx + idy * lddm] = sigma_square *  exp(-(expr1/localtheta1)); 
+}
 
 void cudaDcmg_matern135_2_strided( 
         double *A, 
@@ -270,13 +307,23 @@ void cudaDcmg_powexp_strided(
     dim3 dimBlock(CHUNKSIZE, CHUNKSIZE);
     dim3 dimGrid(nBlockx, nBlocky);
 
-    Dcmg_powexp_strided_kernel<<<dimGrid, dimBlock, 0, stream>>>(
+    if (distance_metric == 0){
+        Dcmg_powexp_strided_kernel<<<dimGrid, dimBlock, 0, stream>>>(
         A, m, n, lddm, 
         l1_x_cuda, l1_y_cuda, 
         l2_x_cuda, l2_y_cuda, 
         localtheta[0], localtheta[1], 
         localtheta[2],
         distance_metric);
+    }else{
+        Dcmg_powexp_strided_kernel_earth_distance<<<dimGrid, dimBlock, 0, stream>>>(
+        A, m, n, lddm, 
+        l1_x_cuda, l1_y_cuda, 
+        l2_x_cuda, l2_y_cuda, 
+        localtheta[0], localtheta[1], 
+        localtheta[2],
+        distance_metric);
+    }
 
     // cudaStreamSynchronize(stream);
 }

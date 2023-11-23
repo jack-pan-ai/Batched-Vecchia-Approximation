@@ -110,7 +110,7 @@ void saveLogFileSum(int iterations, std::vector<T> theta, double max_llh, double
     // Print the log message to the log file using printf
     printf("Total Number of Iterations = %d \n", iterations);
     printf("Total Optimization Time = %lf secs \n", whole_time);
-    printf("Model Parameters (Variance, range, smoothness): (%lf, %lf, %lf) -> Loglik: %lf \n",\
+    printf("Model Parameters (Variance, range, smoothness): (%.8f, %.8f, %.8f) -> Loglik: %.18f \n",\
                 theta[0], theta[1], theta[2], max_llh);
     std::ofstream outfile(file_path);
 

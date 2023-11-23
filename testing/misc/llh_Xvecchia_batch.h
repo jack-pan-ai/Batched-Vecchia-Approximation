@@ -2,6 +2,8 @@
 #define LLH_XVECCHIA_BATCH_H
 
 #include <omp.h>
+#include <iostream>
+#include <cstdio> // For printf
 
 #include "../aux_operations.h"
 
@@ -179,7 +181,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
         /*
         cholesky decomposition
         */
-        // for (int i = 0; i < data->batchCount_gpu[g]; i++)
+        // for (int i = 0; i < 2; i++) // data->batchCount_gpu[g]
         // {
         //     printf("%dth", i);
         //     printMatrixGPU(data->Acon, data->Acon, data->d_A_conditioning[g] + i * data->Acon * data->lddacon, data->lddacon);
@@ -412,7 +414,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
     }
     if (data->perf != 1){
         if (data->kernel ==1 || data->kernel == 2){
-            printf("%dth Model Parameters (Variance, range, smoothness): (%lf, %lf, %lf) -> Loglik: %lf \n", 
+            printf("%dth Model Parameters (Variance, range, smoothness): (%1.8lf, %1.8lf, %1.8lf) -> Loglik: %.18lf \n", 
                 data->iterations, localtheta[0], localtheta[1], localtheta[2], llk); 
         }else if (data->kernel ==3){
             printf("%dth Model Parameters (Variance1, Variance2, range, smoothness1, smoothness2, beta): (%lf, %lf, %lf, %lf, %lf, %lf) -> Loglik: %lf \n", 

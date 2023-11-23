@@ -149,9 +149,9 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
 
   // optimization setting
   opts->tol = 1e-5;
-  opts->maxiter = 2000;
+  opts->maxiter = 1000;
   opts->lower_bound = 0.01;
-  opts->upper_bound = 5.;
+  opts->upper_bound = 2;
 
   // openmp
   opts->omp_numthreads = 40;
@@ -359,6 +359,7 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
             opts->num_params = 3; // Set appropriate values for the 'matern' kernel
             opts->p = 1; // You can modify this as per the requirement for 'matern'
         } else if (strcmp(kernel_str, "univariate_powexp_stationary_no_nugget") == 0) {
+            fprintf(stderr, "You are using the Power exponential Kernel (sigma^2, range, smooth)!\n");
             opts->kernel = 2; // Change as per your requirement for 'powexp'
             opts->num_params = 3; // Set appropriate values for the 'powexp' kernel
             opts->p = 1; // Modify as needed for 'powexp'
@@ -413,27 +414,13 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
         if (a2 != -1) opts->beta = a2;
         if (a3 != -1) opts->nu = a3;
 
-        // Check if at least one value is known
-        if (a1 == -1 && a2 == -1 && a3 == -1) {
-            printf("Please specify the parameters to be estimated, such as ?:?:?");
-            exit(0); // Exit if all values are unknown
-            // printf will not execute due to exit above
-        }
+        // // Check if at least one value is known
+        // if (a1 == -1 && a2 == -1 && a3 == -1) {
+        //     printf("Please specify the parameters to be estimated, such as ?:?:?");
+        //     exit(0); // Exit if all values are unknown
+        //     // printf will not execute due to exit above
+        // }
     }
-
-    // else if ( strcmp("--ikernel", argv[i]) == 0 && i+1 < argc ) {
-    //   i++;
-    //   double a1, a2, a3, a4, a5, a6;
-    //   info = sscanf( argv[i], "%lf:%lf:%lf:%lf:%lf:%lf", &a1, &a2, &a3, &a4, &a5, &a6);
-    //   if ( info == 3 ) {
-    //     opts->sigma = a1;
-    //     opts->beta = a2;
-    //     opts->nu = a3;
-    //   }else{
-    //     exit(0);
-    //     printf("Other kernels have been developing on the way!");
-    //   }
-    // }
     // ----- usage
     else if ( strcmp("-h",     argv[i]) == 0 || strcmp("--help", argv[i]) == 0 ) {
       USAGE

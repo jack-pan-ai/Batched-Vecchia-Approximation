@@ -25,7 +25,7 @@
 #include <ctime>
 #include <nlopt.hpp>
 #include <vector>
-#include <gsl/gsl_errno.h>
+// #include <gsl/gsl_errno.h>
 #include <typeinfo>
 
 
@@ -105,7 +105,7 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     T *d_A_conditioning[ngpu], *d_A_cross[ngpu], *d_C_conditioning[ngpu];
     int ldacon, ldccon, Acon, Ccon;
     int lddacon, lddccon;
-    // used for the store the memory of offsets for mu and sigma
+    // used for the store the memory of offsets for mu and 
     // or, you could say that this is correction term
     T *d_A_offset_vector[ngpu], *d_mu_offset_vector[ngpu];
     // covariance matrix generation on GPU
@@ -242,23 +242,36 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
         // for(int i = 0; i < Cm * batchCount; i++) printf("%ith %lf \n",i, h_C[i]);
         // // the optimization initial values
         localtheta_initial = {opts.sigma, opts.beta, opts.nu};
+        // data.distance_metric = 0;
+        // for(int i = 0; i < 30; i++) printf("%ith (%lf, %lf, %lf) \n", i, locations->x[i], locations->y[i], h_C_data[i]);
+        // exit(0);
         // fprintf(stderr, "%lf, %lf ,%lf \n", localtheta_initial[0], localtheta_initial[1], localtheta_initial[2]);
     }else{
         // real dataset soil (umcomment it if used)
-        // std::string xy_path = "./data/soil_moisture/R" + std::to_string(opts.seed) + \
-        //                         "/METAinfo";
-        // std::string z_path = "./data/soil_moisture/R" + std::to_string(opts.seed) + \
-        //                         "/ppt.complete.Y001";
-        std::string xy_path = "./extras/estimation_test/locs";
+        // std::string xy_path;
+        // std::string z_path;
+        // if (opts.num_loc == 250000){
+        //     std::string xy_path = "./soil_moist/meta_train_0.125";
+        //     std::string z_path = "./soil_moist/observation_train_0.125";
+        // }else{
+        //     // 500k data subsampling
+        //     std::string xy_path = "./soil_moist/meta_train_0.25";
+        //     std::string z_path = "./soil_moist/observation_train_0.25";
+        // }
+        // data.distance_metric = 1;
+        std::string xy_path = "./extras/estimation_test/loc";
         std::string z_path = "./extras/estimation_test/z";
-        data.distance_metric = 1;
+        data.distance_metric = 0;
         locations = loadXYcsv(xy_path, opts.num_loc); 
         loadObscsv<T>(z_path, opts.num_loc, h_C_data);
+        // for(int i = 0; i < 30; i++) printf("%ith (%lf, %lf, %lf) \n", i, locations->x[i], locations->y[i], h_C_data[i]);
+        // exit(0);
         if (opts.kernel == 1) {
             localtheta_initial = {opts.lower_bound, opts.lower_bound, opts.nu};
         }
         else {
             localtheta_initial = {opts.lower_bound, opts.lower_bound, opts.lower_bound};
+            // localtheta_initial = {1.13611188, 0.40422312, 1.56494933};
         }
     }
 
@@ -390,9 +403,6 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     data.h_mu_offset_vector = h_mu_offset_vector;
 
     // opts
-    data.sigma = opts.sigma;
-    data.beta = opts.beta;
-    data.nu = opts.nu;
     data.vecchia = opts.vecchia;
     data.iterations = 0;
     data.omp_threads = opts.omp_numthreads;
@@ -530,6 +540,6 @@ int main(int argc, char **argv)
 //     TYPE alpha = make_cuDoubleComplex(1.2, -0.6);
 // #endif
     double alpha = 1.;
-    gsl_set_error_handler_off();
+    // gsl_set_error_handler_off();
     return test_Xvecchia_batch<double>(opts, alpha);
 }
