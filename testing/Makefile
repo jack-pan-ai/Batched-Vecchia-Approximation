@@ -76,11 +76,11 @@ endif
 all: $(EXE_BATCH)
 
 $(OBJ_DIR)/testing_helper.o: testing_helper.cu
-	$(NVCC) $(NVOPTS) $(NVOPTS_3) $(INCLUDES) $(NVCCFLAGS) -c $< -o $@
+	$(NVCC) $(NVOPTS) $(NVOPTS_3) $(INCLUDES) $(NVCCFLAGS) -allow-unsupported-compiler -c $< -o $@
 
 # dotproduct operations
 $(OBJ_DIR)/aux_operations.o: aux_operations.cu
-	$(NVCC) $(NVOPTS) $(NVOPTS_3) $(INCLUDES) $(NVCCFLAGS) -c $< -o $@
+	$(NVCC) $(NVOPTS) $(NVOPTS_3) $(INCLUDES) $(NVCCFLAGS) -allow-unsupported-compiler -c $< -o $@
 
 $(OBJ_DIR)/ckernel.o: ckernel.cpp
 	$(CXX) $(COPTS) $(INCLUDES) -c $< -o $@
