@@ -248,20 +248,20 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
         // fprintf(stderr, "%lf, %lf ,%lf \n", localtheta_initial[0], localtheta_initial[1], localtheta_initial[2]);
     }else{
         // real dataset soil (umcomment it if used)
-        // std::string xy_path;
-        // std::string z_path;
-        // if (opts.num_loc == 250000){
-        //     std::string xy_path = "./soil_moist/meta_train_0.125";
-        //     std::string z_path = "./soil_moist/observation_train_0.125";
-        // }else{
-        //     // 500k data subsampling
-        //     std::string xy_path = "./soil_moist/meta_train_0.25";
-        //     std::string z_path = "./soil_moist/observation_train_0.25";
-        // }
-        // data.distance_metric = 1;
-        std::string xy_path = "./extras/estimation_test/loc";
-        std::string z_path = "./extras/estimation_test/z";
-        data.distance_metric = 0;
+        std::string xy_path;
+        std::string z_path;
+        if (opts.num_loc == 250000){
+            xy_path = "./soil_moist/meta_train_0.125";
+            z_path = "./soil_moist/observation_train_0.125";
+        }else{
+            // 500k data subsampling
+            xy_path = "./soil_moist/meta_train_0.25";
+            z_path = "./soil_moist/observation_train_0.25";
+        }
+        data.distance_metric = 1;
+        // std::string xy_path = "./extras/estimation_test/loc";
+        // std::string z_path = "./extras/estimation_test/z";
+        // data.distance_metric = 0;
         locations = loadXYcsv(xy_path, opts.num_loc); 
         loadObscsv<T>(z_path, opts.num_loc, h_C_data);
         // for(int i = 0; i < 30; i++) printf("%ith (%lf, %lf, %lf) \n", i, locations->x[i], locations->y[i], h_C_data[i]);

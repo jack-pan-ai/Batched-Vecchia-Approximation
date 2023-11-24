@@ -98,12 +98,18 @@ void createLogFile(kblas_opts &opts)
 template<class T>
 void saveLogFileSum(int iterations, std::vector<T> theta, double max_llh, double whole_time,  kblas_opts &opts) {
 
-    std::string file_path = "./log/locs_" + std::to_string(opts.num_loc) + "_" \
+    std::string file_path;
+    if (opts.perf == 1){
+        file_path = "./log/locs_" + std::to_string(opts.num_loc) + "_" \
                             + "cs_" + std::to_string(opts.vecchia_cs) + "_" \
                             + "seed_" + std::to_string(opts.seed) + "_" \
                             + "kernel_" + std::to_string(opts.sigma) + ":" \
                                 + std::to_string(opts.beta) + ":" \
                                 + std::to_string(opts.nu);
+    }else{
+        file_path = "./log/locs_" + std::to_string(opts.num_loc) + "_" \
+                            + "cs_" + std::to_string(opts.vecchia_cs);
+    }
     if (opts.mortonordering) file_path = file_path + "_morton";
     else if (opts.randomordering) file_path = file_path + "_random";
 

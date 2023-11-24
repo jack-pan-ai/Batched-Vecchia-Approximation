@@ -41,7 +41,8 @@ endif
 
 # libraries to link against
 LIB= -lm -l${LIB_KBLAS_NAME}
-# LIB+= -lnlopt  -lgsl
+LIB+= -lnlopt  
+#-lgsl
 ifdef _USE_MAGMA_
 	LIB+= -lmagma -lcusparse
 endif
