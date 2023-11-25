@@ -94,8 +94,7 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     
     // // no nugget
     std::vector<T> localtheta_initial;
-    // T *localtheta;
-    // T *localtheta_initial;
+    std::vector<T> ub;
     T *grad; // used for future gradient based optimization, please do not comment it
 
     // vecchia offset
@@ -242,6 +241,9 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
         // for(int i = 0; i < Cm * batchCount; i++) printf("%ith %lf \n",i, h_C[i]);
         // // the optimization initial values
         localtheta_initial = {opts.sigma, opts.beta, opts.nu};
+        ub.push_back(opts.upper_bound);
+        ub.push_back(opts.upper_bound);
+        ub.push_back(opts.upper_bound);
         // data.distance_metric = 0;
         // for(int i = 0; i < 30; i++) printf("%ith (%lf, %lf, %lf) \n", i, locations->x[i], locations->y[i], h_C_data[i]);
         // exit(0);
@@ -251,13 +253,25 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
         std::string xy_path;
         std::string z_path;
         if (opts.num_loc == 250000){
-            xy_path = "./soil_moist/meta_train_0.125";
-            z_path = "./soil_moist/observation_train_0.125";
+            // xy_path = "./soil_moist/meta_train_0.125";
+            // z_path = "./soil_moist/observation_train_0.125";
+            xy_path = "./wind/meta_train_250000";
+            z_path = "./wind/observation_train_250000";
         }else{
             // 500k data subsampling
-            xy_path = "./soil_moist/meta_train_0.25";
-            z_path = "./soil_moist/observation_train_0.25";
+            // xy_path = "./soil_moist/meta_train_0.25";
+            // z_path = "./soil_moist/observation_train_0.25";
+            xy_path = "./wind/meta_train_500000";
+            z_path = "./wind/observation_train_500000";
         }
+        // // soil dataset
+        // ub.push_back(2);
+        // ub.push_back(2);
+        // ub.push_back(2);
+        // wind dataset
+        ub.push_back(20);
+        ub.push_back(2);
+        ub.push_back(2);
         data.distance_metric = 1;
         // std::string xy_path = "./extras/estimation_test/loc";
         // std::string z_path = "./extras/estimation_test/z";
@@ -271,7 +285,6 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
         }
         else {
             localtheta_initial = {opts.lower_bound, opts.lower_bound, opts.lower_bound};
-            // localtheta_initial = {1.13611188, 0.40422312, 1.56494933};
         }
     }
 
@@ -443,7 +456,6 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     // Set up the optimization problem
     nlopt::opt opt(nlopt::LN_BOBYQA, opts.num_params); // Use the BOBYQA algorithm in 2 dimensions
     std::vector<T> lb(opts.num_params, opts.lower_bound);
-    std::vector<T> ub(opts.num_params, opts.upper_bound); 
     if (opts.kernel == 3){ // bivariate matern kernel 
         ub.back() = 1. ;// beta should be constrained somehow
     }else if (opts.kernel == 1){
