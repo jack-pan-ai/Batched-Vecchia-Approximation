@@ -273,8 +273,8 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
         ub.push_back(2);
         ub.push_back(2);
         data.distance_metric = 1;
-        // std::string xy_path = "./extras/estimation_test/loc";
-        // std::string z_path = "./extras/estimation_test/z";
+        // std::string xy_path = "./extras/estimation_test/LOC_6400_1";
+        // std::string z_path = "./extras/estimation_test/Z_6400_1";
         // data.distance_metric = 0;
         locations = loadXYcsv(xy_path, opts.num_loc); 
         loadObscsv<T>(z_path, opts.num_loc, h_C_data);
@@ -291,11 +291,23 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     // exit(0);
 
     // Ordering for locations and observations
-    if (opts.randomordering==1){
-        fprintf(stderr, "You were using the Random ordering. \n");
-        random_reordering(opts.num_loc, locations, h_C_data);
+    if (opts.perf == 1){
+        if (opts.randomordering==1){
+            fprintf(stderr, "You were using the Random ordering. \n");
+            random_reordering(opts.num_loc, locations, h_C_data);
+        }else{
+            // for synthetic data in exageostat, morton is default
+            fprintf(stderr, "You were using the Morton ordering. \n");
+        }
     }else{
-        fprintf(stderr, "You were using the Morton ordering. \n");
+        // real dataset ordering 
+        if (opts.randomordering==1){
+            fprintf(stderr, "You were using the Random ordering. \n");
+            random_reordering(opts.num_loc, locations, h_C_data);
+        }else if (opts.mortonordering==1){
+            zsort_reordering(opts.num_loc, locations, h_C_data);
+            fprintf(stderr, "You were using the Morton ordering. \n");
+        }
     }
 
     /*
