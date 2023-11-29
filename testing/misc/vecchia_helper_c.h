@@ -17,16 +17,16 @@ typedef struct llh_data {
     int lda, ldc, ldda, lddc;
     int ldacon, ldccon, Acon, Ccon;
     int lddacon, lddccon;
+    int bs, cs;
     int devices[NGPU_MAX_NUM];
     // TBD for non uniform 
     // int max_M, max_N;
     // int ISEED[4] = {0, 0, 0, 1};
-    // int seed = 0;
+    int seed;
 
     double *h_A, *h_C;
-    double *d_A[NGPU_MAX_NUM], *d_C[NGPU_MAX_NUM];
-    // int *h_M, *h_N,
-    //     *d_M[NGPU_MAX_NUM], *d_N[NGPU_MAX_NUM];
+    double *d_C[NGPU_MAX_NUM];
+    double *h_C_data; // use for keep the data h_C will be overwritten;
     double **d_A_array[NGPU_MAX_NUM], **d_C_array[NGPU_MAX_NUM];
     int *d_ldda[NGPU_MAX_NUM], *d_lddc[NGPU_MAX_NUM];
     double *dot_result_h[NGPU_MAX_NUM];
@@ -36,21 +36,24 @@ typedef struct llh_data {
     location *locations;
     location *locations_con_boundary;
     location* locations_con;
-    // location* locations_con[BATCHCOUNT_MAX];
     location* locations_copy;
     // no nugget
     double *localtheta;
 
     // vecchia offset
-    double *h_A_copy, *h_A_conditioned, *h_C_conditioned;
-    double *d_A_copy[NGPU_MAX_NUM], *d_A_conditioned[NGPU_MAX_NUM], *d_C_conditioned[NGPU_MAX_NUM];
+    double *h_A_conditioning, *h_A_cross, *h_C_conditioning;
+    double *h_A_offset_vector, *h_mu_offset_vector;
+    double *d_A_conditioning[NGPU_MAX_NUM], *d_A_cross[NGPU_MAX_NUM], *d_C_conditioning[NGPU_MAX_NUM];
     // used for the store the memory of offsets for mu and sigma
-    double *d_A_offset[NGPU_MAX_NUM], *d_mu_offset[NGPU_MAX_NUM];
-    double *d_C_copy[NGPU_MAX_NUM];
+    double *d_A_offset_vector[NGPU_MAX_NUM], *d_mu_offset_vector[NGPU_MAX_NUM];
+    // gpu covariance matrix generation
+    double *locations_xx_d[NGPU_MAX_NUM], *locations_yy_d[NGPU_MAX_NUM];
+    double *locations_con_xx_d[NGPU_MAX_NUM], *locations_con_yy_d[NGPU_MAX_NUM];
+    
 
 
-    int batchCount_gpu;
-    int batchCount;
+    size_t batchCount_gpu[NGPU_MAX_NUM];
+    size_t batchCount;
 
     // lapack flags
 	char uplo;
@@ -66,7 +69,7 @@ typedef struct llh_data {
 
     // vecchia
     int vecchia;
-    int vecchia_num;
+    int vecchia_cs;
 
     // iter
     int iterations;
@@ -78,7 +81,6 @@ typedef struct llh_data {
     int kernel;
     int num_params;
     int num_loc;
-    int zvecs;
 
     //vecchia time monitoring
     double vecchia_time_total;
@@ -89,6 +91,8 @@ typedef struct llh_data {
     // real dataset
     int distance_metric; // 0 for euclidean; 1 for earth location.
 
+    // performance && test
+    int perf;
     kblasHandle_t *kblas_handle[NGPU_MAX_NUM];
 } llh_data;
 

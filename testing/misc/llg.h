@@ -137,12 +137,12 @@ Some Auxiliary print function
 */
 void printLocations(int N, location *locations)
 {
-  printf("\n---------------------------------\n");
+  fprintf(stderr, "\n---------------------------------\n");
   for (int i = 0; i < N; i++)
   {
-    printf("%d th location: (%lf, %lf)\n", i, locations->x[i], locations->y[i]);
+    fprintf(stderr, "%d th location: (%lf, %lf)\n", i, locations->x[i], locations->y[i]);
   }
-  printf("-----------------------------------\n");
+  fprintf(stderr, "-----------------------------------\n");
 }
 
 template <class T>
@@ -161,6 +161,21 @@ void printMatrixCPU(int m, int n, T *h_A, int lda, int i)
     }
     printf("\n");
   }
+  printf("-------------------------------\n");
+}
+
+template <class T>
+void printVectorCPU(int m, T *h_C, int ldc, int i)
+{
+  printf("-------------------------------\n");
+  printf("%d batch of all. (CPU)\n", i);
+  for (int i = 0; i < m; i++)
+  {
+    // printf("(%d)", i + j * lda);
+    printf("%lg ,", (double)h_C[i]);
+    // printf(", ");
+  }
+  printf("\n");
   printf("-------------------------------\n");
 }
 
@@ -203,6 +218,22 @@ void printVecGPU(int Cm, int Cn, T *d_C, int lda, int i)
   printf("\n-------------------------------\n");
   free(h_C);
 }
+
+template <class T>
+void printVecGPUv1(int Cm, T *d_C)
+{
+  printf("-------------------------------\n");
+  T *h_C = (T *)malloc(sizeof(T) * Cm);
+  cudaMemcpy(h_C, d_C, sizeof(T) * Cm, cudaMemcpyDeviceToHost);
+  for (int i = 0; i < Cm; i++)
+  {
+    // printf("(%d)", i);
+    printf("%lf, ", (double)h_C[i]);
+  }
+  printf("\n-------------------------------\n");
+  free(h_C);
+}
+
 
 template<class T>
 void Xrand_matrix(long rows, long cols, T* A, long LDA)

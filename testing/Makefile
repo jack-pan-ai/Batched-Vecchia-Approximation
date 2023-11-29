@@ -11,7 +11,7 @@ INCLUDES+= -I.
 INCLUDES+= -I${_CUDA_ROOT_}/include
 INCLUDES+= -I${_KBLAS_ROOT_}/include -I${_KBLAS_ROOT_}/src
 INCLUDES+= -I${_NLOPT_ROOT_}/include
-INCLUDES+= -I${_GSL_ROOT_}/include
+# INCLUDES+= -I${_GSL_ROOT_}/include
 
 ifdef _USE_MAGMA_
 	INCLUDES+= -I$(_MAGMA_ROOT_)/include
@@ -27,7 +27,7 @@ LIB_PATH=
 LIB_PATH+= -L${_CUDA_ROOT_}/lib64
 LIB_PATH+= -L${_KBLAS_ROOT_}/lib
 LIB_PATH+= -L${_NLOPT_ROOT_}/lib
-LIB_PATH+= -L${_GSL_ROOT_}/lib
+# LIB_PATH+= -L${_GSL_ROOT_}/lib
 
 ifdef _USE_MAGMA_
 	LIB_PATH+= -L${_MAGMA_ROOT_}/lib
@@ -41,7 +41,8 @@ endif
 
 # libraries to link against
 LIB= -lm -l${LIB_KBLAS_NAME}
-LIB+= -lnlopt  -lgsl
+LIB+= -lnlopt  
+#-lgsl
 ifdef _USE_MAGMA_
 	LIB+= -lmagma -lcusparse
 endif
@@ -75,13 +76,17 @@ endif
 all: $(EXE_BATCH)
 
 $(OBJ_DIR)/testing_helper.o: testing_helper.cu
-	$(NVCC) $(NVOPTS) $(NVOPTS_3) $(INCLUDES) $(NVCCFLAGS) -c $< -o $@
+	$(NVCC) $(NVOPTS) $(NVOPTS_3) $(INCLUDES) $(NVCCFLAGS) -allow-unsupported-compiler -c $< -o $@
+
+# dotproduct operations
+$(OBJ_DIR)/aux_operations.o: aux_operations.cu
+	$(NVCC) $(NVOPTS) $(NVOPTS_3) $(INCLUDES) $(NVCCFLAGS) -allow-unsupported-compiler -c $< -o $@
 
 $(OBJ_DIR)/ckernel.o: ckernel.cpp
 	$(CXX) $(COPTS) $(INCLUDES) -c $< -o $@
 
-$(EXE_BATCH): $(BIN_DIR)/%: $(OBJ_DIR)/%.o $(KBLAS_LIB) $(OBJ_DIR)/testing_helper.o $(OBJ_DIR)/ckernel.o
-	$(CC) $(COPTS) $(OBJ_DIR)/testing_helper.o $(OBJ_DIR)/ckernel.o $< -o $@ $(LIB_PATH) $(LIB)
+$(EXE_BATCH): $(BIN_DIR)/%: $(OBJ_DIR)/%.o $(KBLAS_LIB) $(OBJ_DIR)/testing_helper.o $(OBJ_DIR)/ckernel.o $(OBJ_DIR)/aux_operations.o
+	$(CC) $(COPTS) $(OBJ_DIR)/testing_helper.o $(OBJ_DIR)/ckernel.o $(OBJ_DIR)/aux_operations.o $< -o $@ $(LIB_PATH) $(LIB)
 
 clean:
 	rm -f $(OBJ_DIR)/*.o $(EXE_BATCH)

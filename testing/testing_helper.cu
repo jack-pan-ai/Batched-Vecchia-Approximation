@@ -34,48 +34,6 @@
 
 #include "testing_helper.h"
 
-// ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// // Generating array of pointers from a strided array
-// ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// template<class T>
-// struct UnaryAoAAssign : public thrust::unary_function<int, T*>
-// {
-//   T* original_array;
-//   int stride;
-//   UnaryAoAAssign(T* original_array, int stride) { this->original_array = original_array; this->stride = stride; }
-//   __host__ __device__
-//   T* operator()(const unsigned int& thread_id) const { return original_array + thread_id * stride; }
-// };
-
-// template<class T>
-// void generateArrayOfPointersT(T* original_array, T** array_of_arrays, int stride, int num_arrays, cudaStream_t stream)
-// {
-//   thrust::device_ptr<T*> dev_data(array_of_arrays);
-
-//   thrust::transform(
-//     thrust::cuda::par.on(stream),
-//     thrust::counting_iterator<int>(0),
-//     thrust::counting_iterator<int>(num_arrays),
-//     dev_data,
-//     UnaryAoAAssign<T>(original_array, stride)
-//     );
-
-//   check_error( cudaGetLastError() );
-// }
-
-// extern "C" void generateDArrayOfPointers(double* original_array, double** array_of_arrays, int stride, int num_arrays, cudaStream_t stream)
-// { generateArrayOfPointersT<double>(original_array, array_of_arrays, stride, num_arrays, stream); }
-
-// extern "C" void generateSArrayOfPointers(float* original_array, float** array_of_arrays, int stride, int num_arrays, cudaStream_t stream)
-// { generateArrayOfPointersT<float>(original_array, array_of_arrays, stride, num_arrays, stream); }
-
-// extern "C" void generateDArrayOfPointersHost(double* original_array, double** array_of_arrays, int stride, int num_arrays)
-// { for(int i = 0; i < num_arrays; i++) array_of_arrays[i] = original_array + i * stride; }
-
-// extern "C" void generateSArrayOfPointersHost(float* original_array, float** array_of_arrays, int stride, int num_arrays)
-// { for(int i = 0; i < num_arrays; i++) array_of_arrays[i] = original_array + i * stride; }
-
-
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Error helpers
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -166,33 +124,34 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
   opts->tolerance  = 0.;
   opts->time       = 0;
   opts->nonUniform = 0; // TBD
-  opts->batchCount = 4;
+  // opts->batchCount = 4;
   opts->strided    = 1; // TBD
 
   // local theta for kernel in GPs
-  opts->sigma     = 0.;
-  opts->beta     = 0.;
-  opts->nu     = 0.;
-  opts->sigma1     = 0.;
-  opts->sigma2     = 0.;
-  opts->alpha     = 0.;
-  opts->nu1     = 0.;
-  opts->nu2     = 0.;
-  opts->beta     = 0.;
+  opts->sigma     = 0.1;
+  opts->beta     = 0.1;
+  opts->nu     = 0.1;
+  // bivariate
+  opts->sigma1     = 0.1;
+  opts->sigma2     = 0.1;
+  opts->alpha     = 0.1;
+  opts->nu1     = 0.1;
+  opts->nu2     = 0.1;
+  opts->beta     = 0.1;
   
   // performance test
   opts->perf = 0;
 
-  // vecchia conditioned
-  opts->vecchia =0; 
-  opts->vecchia_num =0; 
+  // vecchia conditioning
+  opts->vecchia = 1; 
+  opts->vecchia_cs =0; 
   opts->test =0;
 
   // optimization setting
   opts->tol = 1e-5;
-  opts->maxiter = 2000;
+  opts->maxiter = 1000;
   opts->lower_bound = 0.01;
-  opts->upper_bound = 5.;
+  opts->upper_bound = 2;
 
   // openmp
   opts->omp_numthreads = 40;
@@ -201,7 +160,6 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
   opts->kernel = 1;
   opts->num_params = 3;
   opts->num_loc = 40000;
-  opts->zvecs = 1;
 
   // bivariate 
   opts->p = 1; // univaraite
@@ -211,6 +169,10 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
 
   // random ordering
   opts->randomordering = 0;
+  opts->mortonordering = 1;
+
+  // irregular locations generation 
+  opts->seed = 0;
 
   int ndevices;
   cudaGetDeviceCount( &ndevices );
@@ -310,48 +272,6 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
       kblas_assert( opts->nstream > 0,
        "error: --nstream %s is invalid; ensure nstream > 0.\n", argv[i] );
     }
-    else if ( (strcmp("--batchCount",   argv[i]) == 0 || strcmp("--batch",   argv[i]) == 0) && i+1 < argc ) {
-      i++;
-      int start, stop, step;
-      char op;
-      info = sscanf( argv[i], "%d:%d%c%d", &start, &stop, &op, &step );
-      if( info == 1 ){
-        opts->batch[0] = opts->batchCount = start;
-      }else {
-        fprintf( stderr, "error: --batchCount %s is invalid; ensure start > 0.\n",
-          argv[i] );
-        exit(1);
-      }
-      //opts->batchCount = atoi( argv[++i] );
-      //kblas_assert( opts->batchCount > 0, "error: --batchCount %s is invalid; ensure batchCount > 0.\n", argv[i] );
-    }
-    // else if ( (strcmp("--rank",   argv[i]) == 0) && i+1 < argc ) {
-    //   i++;
-    //   int start, stop, step;
-    //   char op, sep;
-    //   info = sscanf( argv[i], "%d%c%d%c%d", &start, &sep, &stop, &op, &step );
-    //   if( info == 1 ){
-    //     opts->rank[0] = opts->rank[1] = start;
-    //   }else
-    //   if( info == 3 ){
-    //     opts->rank[0] = start;
-    //     opts->rank[1] = stop;
-    //   }else
-    //   if ( info == 5 && start >= 0 && stop >= 0 && step != 0 && (op == '+' || op == '*' || op == ':')) {
-    //     opts->rtest = 0;
-    //     for( int b = start; (step > 0 ? b <= stop : b >= stop); ) {
-    //       opts->rank[ opts->rtest++ ] = b;
-    //       if(op == '*') b *= step; else b += step;
-    //     }
-    //   }
-    //   else {
-    //     fprintf( stderr, "error: --range %s is invalid; ensure start >= 0, stop >= 0, step != 0 && op in (+,*,:).\n",
-    //       argv[i] );
-    //     exit(1);
-    //   }
-    //   //opts->batchCount = atoi( argv[++i] );
-    //   //kblas_assert( opts->batchCount > 0, "error: --batchCount %s is invalid; ensure batchCount > 0.\n", argv[i] );
-    // }
     else if ( strcmp("--omp_threads", argv[i]) == 0 && i+1 < argc ) {
       opts->omp_numthreads = atoi( argv[++i] );
       kblas_assert( opts->omp_numthreads >= 1,
@@ -363,24 +283,23 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
        opts->perf  = 1; 
        opts->maxiter = 1;
       }
-    // used for vecchia conditioned
+    // used for vecchia conditioning
     else if ( strcmp("--test", argv[i]) == 0 ) { opts->test  = 1;    }
-    else if ( strcmp("--vecchia", argv[i]) == 0 ) {
-       opts->vecchia  = 1; 
-       opts->vecchia_num=opts->msize[0];
-      }
-    else if ( (strcmp("--vecchia_num",   argv[i]) == 0) && i+1 < argc ) {
+    // else if ( strcmp("--vecchia", argv[i]) == 0 ) {
+    //    opts->vecchia  = 1;
+    //   }
+    else if ( (strcmp("--vecchia_cs",   argv[i]) == 0) && i+1 < argc ) {
       i++;
       int num;
       info = sscanf( argv[i], "%d", &num);
       if( info == 1 && num > 0 ){
-        opts->vecchia_num = num;
+        opts->vecchia_cs = num;
         opts->vecchia = 1;
-      }else if(info == 1 && num == 0){
-        opts->vecchia_num = 0;
-        opts->vecchia = 0;
+      // }else if(info == 1 && num == 0){
+      //   opts->vecchia_cs = 0;
+      //   opts->vecchia = 0;
       }else{
-        fprintf( stderr, "error: --vecchia_num %s is invalid; ensure only one number and 0 <= vecchia_num <= M.\n", argv[i]);
+        fprintf( stderr, "error: --vecchia_cs %s is invalid; ensure only one number and 0 < vecchia_cs <= N.\n", argv[i]);
         exit(1);
       }
     }
@@ -430,23 +349,24 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
       }
     }
     // --- extra config
-    else if ( (strcmp("--kernel",   argv[i]) == 0) && i+1 < argc ) {
-      i++;
-      int kernel;
-      info = sscanf( argv[i], "%d", &kernel);
-      if( info == 1 && kernel == 1 ){
-        opts->kernel = 1;
-        opts->num_params = 3; 
-        opts->p = 1; // univariate_matern_stationary
-      }else if (info == 1 && kernel == 2){
-        opts->kernel = 2;
-        opts->num_params = 6; 
-        opts->p = 2; // bivariate_matern_parsimonious
-      }
-      else{
-        fprintf( stderr, "Other kernel is developing now!");
-        exit(1);
-      }
+    else if ( (strcmp("--kernel", argv[i]) == 0) && i+1 < argc ) {
+        i++;
+        char* kernel_str = argv[i];
+
+        if (strcmp(kernel_str, "univariate_matern_stationary_no_nugget") == 0) {
+            fprintf(stderr, "You are using the Matern Kernel 1/2, 3/2, 5/2, (sigma^2, range, smooth)!\n");
+            opts->kernel = 1; // You can change this value as needed
+            opts->num_params = 3; // Set appropriate values for the 'matern' kernel
+            opts->p = 1; // You can modify this as per the requirement for 'matern'
+        } else if (strcmp(kernel_str, "univariate_powexp_stationary_no_nugget") == 0) {
+            fprintf(stderr, "You are using the Power exponential Kernel (sigma^2, range, smooth)!\n");
+            opts->kernel = 2; // Change as per your requirement for 'powexp'
+            opts->num_params = 3; // Set appropriate values for the 'powexp' kernel
+            opts->p = 1; // Modify as needed for 'powexp'
+        } else {
+            fprintf(stderr, "Unsupported kernel type: %s\n", kernel_str);
+            exit(1);
+        }
     }
     else if ( (strcmp("--num_loc",   argv[i]) == 0) && i+1 < argc ) {
       i++;
@@ -454,46 +374,52 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
       info = sscanf( argv[i], "%d", &num_loc);
       opts->num_loc=num_loc;
     }
-    else if ( (strcmp("--zvecs",   argv[i]) == 0) && i+1 < argc ) {
-      i++;
-      int zvecs;
-      info = sscanf( argv[i], "%d", &zvecs);
-      if( info == 1 && zvecs <= 10000 ){
-        opts->zvecs=zvecs;
-      }else{
-        fprintf( stderr, "Your dataset does not contain the replicate more than 50!");
-        exit(1);
-      }
-    }
     // k nearest neighbors
     else if ( strcmp("--knn", argv[i]) == 0 ) {
       opts->knn  = 1; 
     }
     // ordering 
-    else if ( strcmp("--randomordering", argv[i]) == 0 ) {
-      opts->randomordering  = 1; 
+    else if ( strcmp("--randomordering", argv[i]) == 0 ){
+      opts->randomordering  = 1;
+      opts->mortonordering  = 0;
+    }
+    // iiregular locations generation seeds
+    else if ( (strcmp("--seed",   argv[i]) == 0) && i+1 < argc ) {
+      i++;
+      int seed;
+      info = sscanf( argv[i], "%d", &seed);
+      opts->seed=seed;
     }
     // ture parameters
     else if ( strcmp("--ikernel", argv[i]) == 0 && i+1 < argc ) {
-      i++;
-      double a1, a2, a3, a4, a5, a6;
-      info = sscanf( argv[i], "%lf:%lf:%lf:%lf:%lf:%lf", &a1, &a2, &a3, &a4, &a5, &a6);
-      if ( info == 3 ) {
-        fprintf(stderr, "You are using the Matern Kernel in the univariate case now!\n");
-        opts->sigma = a1;
-        opts->beta = a2;
-        opts->nu = a3;
-      }else if (info ==6){
-        fprintf(stderr, "You are using the Parsimonious Matern Kernel in the bivariate case now!\n");
-        opts->sigma1 = a1;
-        opts->sigma2 = a2;
-        opts->alpha = a3;
-        opts->nu1 = a4;
-        opts->nu2 = a5;
-        opts->beta = a6;
-      }else{
-        printf("Other kernels have been developing on the way!");
-      }
+        i++;
+        double a1 = -1, a2 = -1, a3 = -1; // Initialize with default values indicating 'unknown'
+        char s1[10], s2[10], s3[10]; // Arrays to hold the string representations
+
+        // Parse the input into string buffers
+        int info = sscanf(argv[i], "%9[^:]:%9[^:]:%9s", s1, s2, s3);
+
+        if (info != 3 ) {
+          printf("Other kernels have been developing on the way!");
+          exit(0);
+        }
+
+        // Check and convert each value
+        if (strcmp(s1, "?") != 0) a1 = atof(s1);
+        if (strcmp(s2, "?") != 0) a2 = atof(s2);
+        if (strcmp(s3, "?") != 0) a3 = atof(s3);
+
+        // Assign values to opts if they are not unknown
+        if (a1 != -1) opts->sigma = a1;
+        if (a2 != -1) opts->beta = a2;
+        if (a3 != -1) opts->nu = a3;
+
+        // // Check if at least one value is known
+        // if (a1 == -1 && a2 == -1 && a3 == -1) {
+        //     printf("Please specify the parameters to be estimated, such as ?:?:?");
+        //     exit(0); // Exit if all values are unknown
+        //     // printf will not execute due to exit above
+        // }
     }
     // ----- usage
     else if ( strcmp("-h",     argv[i]) == 0 || strcmp("--help", argv[i]) == 0 ) {
