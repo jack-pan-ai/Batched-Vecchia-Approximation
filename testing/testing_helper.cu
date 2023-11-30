@@ -150,7 +150,7 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
   // optimization setting
   opts->tol = 1e-5;
   opts->maxiter = 1000;
-  opts->lower_bound = 0.01;
+  opts->lower_bound = 0.001;
   opts->upper_bound = 2;
 
   // openmp

@@ -240,7 +240,7 @@ __global__ void Dcmg_powexp_strided_kernel_earth_distance(
 	v = sin((lon2r - lon1r) / 2.);
     expr = 2.0 * earthRadiusKm * asin(sqrt(u * u + cos(lat1r) * cos(lat2r) * v * v));
 
-    expr1 = pow(expr / 100., localtheta2); // /100 only used for the soil data
+    expr1 = pow(expr / 9348.317, localtheta2); // /9348.317 (soil data) 2523.64 (wind speed)
     A[idx + idy * lddm] = sigma_square *  exp(-(expr1/localtheta1)); 
 }
 
