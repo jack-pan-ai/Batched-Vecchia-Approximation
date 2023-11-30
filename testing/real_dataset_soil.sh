@@ -1,6 +1,6 @@
 #!/bin/bash 
 
-for num_loc in 250000 500000
+for num_loc in 250000
 do
     for Ncs in 10 30 60 90 120 150
     do
@@ -8,7 +8,7 @@ do
     done 
 done
 
-for num_loc in 250000 500000
+for num_loc in 250000
 do
     for Ncs in 10 30 60 90 120 150
     do
