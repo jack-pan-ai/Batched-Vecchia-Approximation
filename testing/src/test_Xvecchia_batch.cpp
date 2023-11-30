@@ -341,7 +341,7 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                 findNearestPoints(
                     h_C_conditioning, h_C_data, locations_con, locations,
                     con_loc , cs + i * bs, 
-                    cs + (i + 1) * bs, cs, i
+                    cs + (i + 1) * bs, cs, i, data.distance_metric
                 );
                 // printLocations(opts.num_loc, locations);
                 // printLocations(cs * i, locations_con);
