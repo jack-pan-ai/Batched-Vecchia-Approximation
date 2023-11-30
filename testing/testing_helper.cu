@@ -131,6 +131,7 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
   opts->sigma     = 0.1;
   opts->beta     = 0.1;
   opts->nu     = 0.1;
+  opts->nugget = 0.0;
   // bivariate
   opts->sigma1     = 0.1;
   opts->sigma2     = 0.1;
@@ -363,6 +364,11 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
             opts->kernel = 2; // Change as per your requirement for 'powexp'
             opts->num_params = 3; // Set appropriate values for the 'powexp' kernel
             opts->p = 1; // Modify as needed for 'powexp'
+        } else if (strcmp(kernel_str, "univariate_powexp_nugget_stationary") == 0) {
+            fprintf(stderr, "You are using the Power exponential Kernel with nugget (sigma^2, range, smooth, nugget)!\n");
+            opts->kernel = 3; // 
+            opts->num_params = 4; // 
+            opts->p = 1; // Modify as needed for 'powexp'
         } else {
             fprintf(stderr, "Unsupported kernel type: %s\n", kernel_str);
             exit(1);
@@ -393,13 +399,13 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
     // ture parameters
     else if ( strcmp("--ikernel", argv[i]) == 0 && i+1 < argc ) {
         i++;
-        double a1 = -1, a2 = -1, a3 = -1; // Initialize with default values indicating 'unknown'
-        char s1[10], s2[10], s3[10]; // Arrays to hold the string representations
+        double a1 = -1, a2 = -1, a3 = -1, a4 = -1; // Initialize with default values indicating 'unknown'
+        char s1[10], s2[10], s3[10], s4[10]; // Arrays to hold the string representations
 
         // Parse the input into string buffers
-        int info = sscanf(argv[i], "%9[^:]:%9[^:]:%9s", s1, s2, s3);
+        int info = sscanf(argv[i], "%9[^:]:%9[^:]:%9[^:]:%9[^:]", s1, s2, s3, s4);
 
-        if (info != 3 ) {
+        if (info < 3 && info > 4) {
           printf("Other kernels have been developing on the way!");
           exit(0);
         }
@@ -408,18 +414,17 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
         if (strcmp(s1, "?") != 0) a1 = atof(s1);
         if (strcmp(s2, "?") != 0) a2 = atof(s2);
         if (strcmp(s3, "?") != 0) a3 = atof(s3);
+        if ( info == 4){
+          if (strcmp(s4, "?") != 0) a4 = atof(s4);
+        } 
 
         // Assign values to opts if they are not unknown
         if (a1 != -1) opts->sigma = a1;
         if (a2 != -1) opts->beta = a2;
         if (a3 != -1) opts->nu = a3;
-
-        // // Check if at least one value is known
-        // if (a1 == -1 && a2 == -1 && a3 == -1) {
-        //     printf("Please specify the parameters to be estimated, such as ?:?:?");
-        //     exit(0); // Exit if all values are unknown
-        //     // printf will not execute due to exit above
-        // }
+        if ( info == 4){
+          if (a4 != -1) opts->nugget = a4;
+        } 
     }
     // ----- usage
     else if ( strcmp("-h",     argv[i]) == 0 || strcmp("--help", argv[i]) == 0 ) {

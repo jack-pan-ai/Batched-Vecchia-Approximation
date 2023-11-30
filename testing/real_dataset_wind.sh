@@ -1,10 +1,10 @@
 #!/bin/bash 
 
-for num_loc in 250000 500000
+for num_loc in 250000
 do
     for Ncs in 10 30 60 90 120 150
     do
-        ./bin/test_dvecchia_batch -N 1:1 -s --kernel univariate_powexp_stationary_no_nugget --num_loc $num_loc --omp_threads 40 --vecchia_cs $Ncs --ikernel ?:?:? --randomordering --knn --tol 9
+        ./bin/test_dvecchia_batch -N 1:1 -s --kernel univariate_powexp_nugget_stationary --num_loc $num_loc --omp_threads 40 --vecchia_cs $Ncs --ikernel ?:?:? --randomordering  --tol 9 --ngpu 2 --maxiter 1
     done 
 done
 

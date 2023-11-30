@@ -29,4 +29,13 @@ void cudaDcmg_powexp_strided(
         const double *localtheta, int distance_metric, 
         cudaStream_t stream);
 
+void cudaDcmg_powexp_nugget_strided( 
+        double *A, 
+        int m, int n, int lddm,
+        // int m0, int n0, 
+        double* l1_x_cuda, double* l1_y_cuda, 
+        double* l2_x_cuda, double* l2_y_cuda,
+        const double *localtheta, int distance_metric, 
+        cudaStream_t stream);
+
 #endif // AUX_OPERATIONS_H

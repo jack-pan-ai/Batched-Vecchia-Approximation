@@ -234,16 +234,24 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     if (opts.perf == 1){
         // fprintf(stderr, "%d \n", opts.seed);
         locations = GenerateXYLoc(opts.num_loc, 0/*opts.seed*/); // 1 is the random seed
-        // for(int i = 0; i < opts.num_loc; i++) h_C_data[i] = (T) rand()/(T)RAND_MAX;
-        for(int i = 0; i < opts.num_loc; i++) h_C_data[i] = 0.0;
+        for(int i = 0; i < opts.num_loc; i++) h_C_data[i] = (T) rand()/(T)RAND_MAX;
+        // for(int i = 0; i < opts.num_loc; i++) h_C_data[i] = 0.0;
         // printLocations(opts.num_loc, locations);
         // printVectorCPU(opts.num_loc, h_C, 1, 1);
         // for(int i = 0; i < Cm * batchCount; i++) printf("%ith %lf \n",i, h_C[i]);
         // // the optimization initial values
-        localtheta_initial = {opts.sigma, opts.beta, opts.nu};
-        ub.push_back(opts.upper_bound);
-        ub.push_back(opts.upper_bound);
-        ub.push_back(opts.upper_bound);
+        if (opts.kernel == 1 || opts.kernel == 2){
+            localtheta_initial = {opts.sigma, opts.beta, opts.nu};
+            ub.push_back(opts.upper_bound);
+            ub.push_back(opts.upper_bound);
+            ub.push_back(opts.upper_bound);
+        }else if (opts.kernel == 3){
+            localtheta_initial = {opts.sigma, opts.beta, opts.nu, opts.nugget};
+            ub.push_back(opts.upper_bound);
+            ub.push_back(opts.upper_bound);
+            ub.push_back(opts.upper_bound);
+            ub.push_back(opts.upper_bound);
+        }
         // data.distance_metric = 0;
         // for(int i = 0; i < 30; i++) printf("%ith (%lf, %lf, %lf) \n", i, locations->x[i], locations->y[i], h_C_data[i]);
         // exit(0);
@@ -257,12 +265,6 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
             // z_path = "./soil_moist/observation_train_0.125";
             xy_path = "./wind/meta_train_250000";
             z_path = "./wind/observation_train_250000";
-        }else{
-            // 500k data subsampling
-            // xy_path = "./soil_moist/meta_train_0.25";
-            // z_path = "./soil_moist/observation_train_0.25";
-            xy_path = "./wind/meta_train_500000";
-            z_path = "./wind/observation_train_500000";
         }
         // // soil dataset
         // ub.push_back(2);
@@ -272,18 +274,28 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
         ub.push_back(20);
         ub.push_back(2);
         ub.push_back(2);
+        ub.push_back(2);
         data.distance_metric = 1;
+        // // test 
         // std::string xy_path = "./extras/estimation_test/LOC_6400_1";
         // std::string z_path = "./extras/estimation_test/Z_6400_1";
         // data.distance_metric = 0;
+        // ub.push_back(5);
+        // ub.push_back(5);
+        // ub.push_back(5);
+        // ub.push_back(5);
         locations = loadXYcsv(xy_path, opts.num_loc); 
         loadObscsv<T>(z_path, opts.num_loc, h_C_data);
         // for(int i = 0; i < 30; i++) printf("%ith (%lf, %lf, %lf) \n", i, locations->x[i], locations->y[i], h_C_data[i]);
         // exit(0);
         if (opts.kernel == 1) {
             localtheta_initial = {opts.lower_bound, opts.lower_bound, opts.nu};
-        }
-        else {
+        }else if (opts.kernel == 3) {
+            // power exponential with nugget effect
+            localtheta_initial = {opts.lower_bound, opts.lower_bound, opts.lower_bound, opts.lower_bound};
+            // localtheta_initial = {1.0, 0.1, 1, 0.1}; // only used for verifcations
+        }else{
+            // 2: power expoenential 
             localtheta_initial = {opts.lower_bound, opts.lower_bound, opts.lower_bound};
         }
     }
@@ -468,7 +480,7 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     // Set up the optimization problem
     nlopt::opt opt(nlopt::LN_BOBYQA, opts.num_params); // Use the BOBYQA algorithm in 2 dimensions
     std::vector<T> lb(opts.num_params, opts.lower_bound);
-    if (opts.kernel == 3){ // bivariate matern kernel 
+    if (opts.kernel == 4){ // bivariate matern kernel 
         ub.back() = 1. ;// beta should be constrained somehow
     }else if (opts.kernel == 1){
         // matern kernel with fixed nu

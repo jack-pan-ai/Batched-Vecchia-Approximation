@@ -100,6 +100,7 @@ void saveLogFileSum(int iterations, std::vector<T> theta, double max_llh, double
 
     std::string file_path;
     if (opts.perf == 1){
+        // only matern is enough
         file_path = "./log/locs_" + std::to_string(opts.num_loc) + "_" \
                             + "cs_" + std::to_string(opts.vecchia_cs) + "_" \
                             + "seed_" + std::to_string(opts.seed) + "_" \
@@ -116,23 +117,45 @@ void saveLogFileSum(int iterations, std::vector<T> theta, double max_llh, double
     // Print the log message to the log file using printf
     printf("Total Number of Iterations = %d \n", iterations);
     printf("Total Optimization Time = %lf secs \n", whole_time);
-    printf("Model Parameters (Variance, range, smoothness): (%.8f, %.8f, %.8f) -> Loglik: %.18f \n",\
+    // matern + power exponential kernel 
+    if (opts.kernel == 1 || opts.kernel == 2){
+        printf("Model Parameters (Variance, range, smoothness): (%.8f, %.8f, %.8f) -> Loglik: %.18f \n",\
                 theta[0], theta[1], theta[2], max_llh);
-    std::ofstream outfile(file_path);
+        std::ofstream outfile(file_path);
 
-    // Write the headers for the CSV file
-    outfile << "Iterations, variance, range, smoothness, log-likelihood, ordering" << std::endl;
-    // Write the log data to the CSV file
-    if (opts.mortonordering){
-        outfile << iterations << ", " \
-                << theta[0] << ", " << theta[1] << ", " << theta[2] << ", " \
-                << std::setprecision(std::numeric_limits<double>::max_digits10) << max_llh << ", morton" << std::endl;
-    }else if (opts.randomordering)
-    {
-        outfile << iterations << ", " \
-                << theta[0] << ", " << theta[1] << ", " << theta[2] << ", " \
-                << std::setprecision(std::numeric_limits<double>::max_digits10) << max_llh << ", random" << std::endl;
+        // Write the headers for the CSV file
+        outfile << "Iterations, variance, range, smoothness, log-likelihood, ordering" << std::endl;
+        // Write the log data to the CSV file
+        if (opts.mortonordering){
+            outfile << iterations << ", " \
+                    << theta[0] << ", " << theta[1] << ", " << theta[2] << ", " \
+                    << std::setprecision(std::numeric_limits<double>::max_digits10) << max_llh << ", morton" << std::endl;
+        }else if (opts.randomordering)
+        {
+            outfile << iterations << ", " \
+                    << theta[0] << ", " << theta[1] << ", " << theta[2] << ", " \
+                    << std::setprecision(std::numeric_limits<double>::max_digits10) << max_llh << ", random" << std::endl;
+        }
+        outfile.close();
+    }else if (opts.kernel == 3){
+        printf("Model Parameters (Variance, range, smoothness, nugget): (%.8f, %.8f, %.8f, %.8f) -> Loglik: %.18f \n",\
+                theta[0], theta[1], theta[2], theta[3], max_llh);
+        std::ofstream outfile(file_path);
+
+        // Write the headers for the CSV file
+        outfile << "Iterations, variance, range, smoothness, nugget, log-likelihood, ordering" << std::endl;
+        // Write the log data to the CSV file
+        if (opts.mortonordering){
+            outfile << iterations << ", " \
+                    << theta[0] << ", " << theta[1] << ", " << theta[2] << ", "  << theta[3] << ", " \
+                    << std::setprecision(std::numeric_limits<double>::max_digits10) << max_llh << ", morton" << std::endl;
+        }else if (opts.randomordering)
+        {
+            outfile << iterations << ", " \
+                    << theta[0] << ", " << theta[1] << ", " << theta[2] << ", "   << theta[3] <<  ", " \
+                    << std::setprecision(std::numeric_limits<double>::max_digits10) << max_llh << ", random" << std::endl;
+        }
+        outfile.close();
     }
-    outfile.close();
 }
 #endif
