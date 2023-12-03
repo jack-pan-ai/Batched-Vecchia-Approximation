@@ -215,6 +215,7 @@ typedef struct kblas_opts
   double sigma;
   double beta;
   double nu;
+  // bivariate
   double sigma1;
   double sigma2;
   double alpha;
@@ -239,7 +240,7 @@ typedef struct kblas_opts
   int kernel;
   int num_params;
   int num_loc;
-  int zvecs;
+  int seed;
 
   // bivariate
   int p;
@@ -249,6 +250,10 @@ typedef struct kblas_opts
 
   // ordering
   int randomordering;
+  int mortonordering;
+
+  // irregular grid
+  int seed;
 } vecchia_opts;
 
 int parse_opts(int argc, char** argv, vecchia_opts *opts);

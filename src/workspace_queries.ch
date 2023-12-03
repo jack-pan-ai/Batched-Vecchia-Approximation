@@ -59,7 +59,7 @@ void syrk_batch_nonuniform_wsquery_core(kblasWorkspaceState_t ws);
 //==============================================================================================
 template<bool STRIDED>
 inline
-void trsm_batch_wsquery_core( int batchCount,
+void trsm_batch_wsquery_core( long long batchCount,
                               char side, int m, int n,
                               kblasWorkspaceState_t wss)
 {
@@ -110,7 +110,7 @@ void symm_batch_nonuniform_wsquery_core(kblasWorkspaceState_t ws);
 //==============================================================================================
 template<bool STRIDED>
 inline
-void potrf_batch_wsquery_core(const int n, int batchCount, kblasWorkspaceState_t wss)
+void potrf_batch_wsquery_core(const int n, long long batchCount, kblasWorkspaceState_t wss)
 {
   int n1 = CLOSEST_REG_SIZE(n);
 

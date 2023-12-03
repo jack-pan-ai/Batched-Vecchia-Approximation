@@ -844,7 +844,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
                         localtheta, llk, 
                         indep_time + vecchia_time, dcmg_time, 
                         data->num_loc, data->M,
-                        data->zvecs, data->p,
+                        data->seed, data->p,
                         data->vecchia_cs); // this is log_tags for write a file
         if (data->kernel ==1){
             printf("%dth Model Parameters (Variance, range, smoothness): (%lf, %lf, %lf) -> Loglik: %lf \n", 

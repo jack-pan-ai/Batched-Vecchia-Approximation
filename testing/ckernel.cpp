@@ -47,7 +47,7 @@ location *GenerateXYLoc(int n, int seed)
     //initalization
     int i = 0, index = 0, j = 0;
     srand(seed);
-    location *locations = (location *) malloc(sizeof(location));
+    location *locations = (location *) malloc(sizeof(location *));
     //Allocate memory
     locations->x = (double* ) malloc(n * sizeof(double));
     locations->y = (double* ) malloc(n * sizeof(double));
@@ -58,23 +58,23 @@ location *GenerateXYLoc(int n, int seed)
     int *grid = (int *) calloc((int) sqrtn, sizeof(int));
 
     for (i = 0; i < sqrtn; i++) {
-        grid[i] = i + 0.0;
+        grid[i] = i + 1;
+		// grid[i] = i + 0.0; // regular
     }
 
     for (i = 0; i < sqrtn && index < n; i++)
         for (j = 0; j < sqrtn && index < n; j++) {
-            // locations->x[index] = (grid[i] - 0.5 + uniform_distribution(-0.4, 0.4)) / sqrtn;
-            // locations->y[index] = (grid[j] - 0.5 + uniform_distribution(-0.4, 0.4)) / sqrtn;
+            locations->x[index] = (grid[i] - 0.5 + uniform_distribution(-0.4, 0.4)) / sqrtn;
+            locations->y[index] = (grid[j] - 0.5 + uniform_distribution(-0.4, 0.4)) / sqrtn;
 			// grid (x, y)
-			locations->x[index] = (grid[i] + 1.0) / sqrtn;
-            locations->y[index] = (grid[j] + 1.0) / sqrtn;
+			// locations->x[index] = (grid[i] + 1.0) / sqrtn;
+            // locations->y[index] = (grid[j] + 1.0) / sqrtn;
             index++;
         }
     free(grid);
-    // zsort_locations(n, locations);
+    zsort_locations(n, locations);
     return locations;
 }
-
 
 /**
  * This function converts decimal degrees to radians

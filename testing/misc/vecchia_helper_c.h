@@ -86,7 +86,7 @@ typedef struct llh_data {
     int kernel;
     int num_params;
     int num_loc;
-    int zvecs;
+    int seed;
 
     //vecchia time monitoring
     double vecchia_time_total;

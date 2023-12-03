@@ -256,16 +256,16 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
         */
     }
 
-    createLogFileParams(opts.num_loc, M, opts.zvecs, opts.p, opts.vecchia_cs);
+    createLogFileParams(opts.num_loc, M, opts.seed, opts.p, opts.vecchia_cs);
     /* 
     Dataset: defined by yourself 
     */
     // Uniform random generation for locations / read locations from disk
     // random generate with seed as 1
     if (opts.perf == 1){
-        locations = GenerateXYLoc(opts.num_loc / opts.p, 1); // 1 is the random seed
+        locations = GenerateXYLoc(opts.num_loc / opts.p, 0 /*opts.seed*/); // 0 is the random seed
         // for(int i = 0; i < opts.num_loc; i++) h_C[i] = (T) rand()/(T)RAND_MAX;
-        for(int i = 0; i < opts.num_loc; i++) h_C[i] = 0;
+        for(int i = 0; i < opts.num_loc; i++) h_C[i] = 0.0;
         // h_C[0] = 1.;
         // h_C[1] = 0.;
         // h_C[2] = 10.;
@@ -281,18 +281,18 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
         // synthetic dataset (umcomment it if used)
         if (opts.p == 1){
             std::string xy_path = "./data/synthetic_ds/LOC_" + std::to_string(opts.num_loc) + "_univariate_matern_stationary_" \
-                    + std::to_string(opts.zvecs);
+                    + std::to_string(opts.seed);
             std::string z_path = "./data/synthetic_ds/Z1_" + std::to_string(opts.num_loc) + "_univariate_matern_stationary_" \
-                        + std::to_string(opts.zvecs);
+                        + std::to_string(opts.seed);
             locations = loadXYcsv(xy_path, int(opts.num_loc/opts.p)); 
             loadObscsv<T>(z_path, int(opts.num_loc/opts.p), h_C);
         }
         if (opts.p == 2){
             // you have to preprocess the data
             std::string xy_path = "./data/synthetic_ds/LOC_" + std::to_string(int(opts.num_loc/opts.p)) + \
-                                "_bivariate_matern_parsimonious_" + std::to_string(opts.zvecs);
+                                "_bivariate_matern_parsimonious_" + std::to_string(opts.seed);
             std::string z_path = "./data/synthetic_ds/Z_" + std::to_string(int(opts.num_loc/opts.p)) + \
-                                    "_bivariate_matern_parsimonious_" + std::to_string(opts.zvecs);
+                                    "_bivariate_matern_parsimonious_" + std::to_string(opts.seed);
             locations = loadXYcsv(xy_path, int(opts.num_loc/opts.p)); 
             loadObscsv<T>(z_path, int(opts.num_loc/opts.p), h_C);
         }
@@ -311,13 +311,13 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     // }
     
     // std::string xy_path = "./data/synthetic_ds/LOC_" + std::to_string(opts.num_loc) \
-    //             + "_" + std::to_string(opts.zvecs);
+    //             + "_" + std::to_string(opts.seed);
     // std::string z_path = "./data/synthetic_ds/Z_" + std::to_string(opts.num_loc) \
-    //             + "_" + std::to_string(opts.zvecs);
+    //             + "_" + std::to_string(opts.seed);
     //// real dataset soil (umcomment it if used)
-    // std::string xy_path = "./data/soil_moisture/R" + std::to_string(opts.zvecs) + \
+    // std::string xy_path = "./data/soil_moisture/R" + std::to_string(opts.seed) + \
     //                         "/METAinfo";
-    // std::string z_path = "./data/soil_moisture/R" + std::to_string(opts.zvecs) + \
+    // std::string z_path = "./data/soil_moisture/R" + std::to_string(opts.seed) + \
     //                         "/ppt.complete.Y001";
     // data.distance_metric = 1;
     // locations = loadXYcsv(xy_path, opts.num_loc); 
@@ -434,7 +434,7 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     // kernel related
     data.kernel = opts.kernel;
     data.num_params = opts.num_params;
-    data.zvecs = opts.zvecs;
+    data.seed = opts.seed;
     data.vecchia_time_total = 0; // used for accumulatet the time on vecchia
     data.p = opts.p; //bivariate = 2 or univariate = 1
     data.perf = opts.perf;
@@ -504,7 +504,7 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     whole_time = end_whole.tv_sec - start_whole.tv_sec + (end_whole.tv_nsec - start_whole.tv_nsec) / 1e9;
     saveLogFileSum(num_iterations, localtheta_initial, 
                 max_llh, whole_time, //whole_time or  data.vecchia_time_total
-                M, opts.num_loc, opts.zvecs, opts.vecchia_cs);
+                M, opts.num_loc, opts.seed, opts.vecchia_cs);
     // int num_evals = 0;
     // num_evals = opt.get_numevals();
     printf("Done! \n");
