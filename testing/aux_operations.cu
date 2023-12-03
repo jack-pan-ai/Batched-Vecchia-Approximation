@@ -240,8 +240,78 @@ __global__ void Dcmg_powexp_strided_kernel_earth_distance(
 	v = sin((lon2r - lon1r) / 2.);
     expr = 2.0 * earthRadiusKm * asin(sqrt(u * u + cos(lat1r) * cos(lat2r) * v * v));
 
-    expr1 = pow(expr / 100., localtheta2); // /100 only used for the soil data
+    expr1 = pow(expr / 2523.64, localtheta2); // /9348.317 (soil data) 2523.64 (wind speed)
     A[idx + idy * lddm] = sigma_square *  exp(-(expr1/localtheta1)); 
+}
+
+__global__ void Dcmg_powexp_nugget_strided_kernel(
+        double *A, 
+        int m, int n, int lddm,
+        // int m0, int n0, 
+        double* l1_x_cuda, double* l1_y_cuda, 
+        double* l2_x_cuda, double* l2_y_cuda,
+        double localtheta0, double localtheta1, 
+        double localtheta2, double localtheta3, 
+        int distance_metric)
+{
+   int idx = blockIdx.x * blockDim.x + threadIdx.x;
+   int idy = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if(idx >= m || idy >= n) return;
+
+    double expr  = 0.0;
+    double expr1 = 0.0;
+    double expr2 = 0.0;
+    double sigma_square = localtheta0;
+    expr = sqrt(
+        pow((l2_x_cuda[idy] - l1_x_cuda[idx]), 2) +
+        pow((l2_y_cuda[idy] - l1_y_cuda[idx]), 2)
+        );
+    if (expr == 0){
+        expr2 = sigma_square + localtheta3;
+    }else{
+        expr1 = pow(expr, localtheta2);
+        expr2 = sigma_square *  exp(-(expr1/localtheta1)); 
+    }
+    A[idx + idy * lddm] = expr2;
+}
+
+
+__global__ void Dcmg_powexp_nugget_strided_kernel_earth_distance(
+        double *A, 
+        int m, int n, int lddm,
+        // int m0, int n0, 
+        double* l1_x_cuda, double* l1_y_cuda, 
+        double* l2_x_cuda, double* l2_y_cuda,
+        double localtheta0, double localtheta1, 
+        double localtheta2, double localtheta3, 
+        int distance_metric)
+{
+   int idx = blockIdx.x * blockDim.x + threadIdx.x;
+   int idy = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if(idx >= m || idy >= n) return;
+
+    double expr  = 0.0;
+    double expr1 = 0.0;
+    double expr2 = 0.0;
+    double sigma_square = localtheta0;
+    // earth distance
+    double lat1r, lon1r, lat2r, lon2r, u, v;
+	lat1r = l1_x_cuda[idx] * PI / 180;
+	lon1r = l1_y_cuda[idx] * PI / 180;
+	lat2r = l2_x_cuda[idy] * PI / 180;
+	lon2r = l2_y_cuda[idy] * PI / 180;
+	u = sin((lat2r - lat1r) / 2.);
+	v = sin((lon2r - lon1r) / 2.);
+    expr = 2.0 * earthRadiusKm * asin(sqrt(u * u + cos(lat1r) * cos(lat2r) * v * v));
+    if (expr == 0){
+        expr2 = sigma_square + localtheta3;
+    }else{
+        expr1 = pow(expr / 2523.64, localtheta2); // /9348.317 (soil data) 2523.64 (wind speed)
+        expr2 = sigma_square *  exp(-(expr1/localtheta1));    
+    }
+    A[idx + idy * lddm] = expr2;
 }
 
 void cudaDcmg_matern135_2_strided( 
@@ -322,6 +392,42 @@ void cudaDcmg_powexp_strided(
         l2_x_cuda, l2_y_cuda, 
         localtheta[0], localtheta[1], 
         localtheta[2],
+        distance_metric);
+    }
+
+    // cudaStreamSynchronize(stream);
+}
+
+void cudaDcmg_powexp_nugget_strided( 
+        double *A, 
+        int m, int n, 
+        int lddm,
+        // int m0, int n0, 
+        double* l1_x_cuda, double* l1_y_cuda, 
+        double* l2_x_cuda, double* l2_y_cuda,
+        const double *localtheta, int distance_metric, 
+        cudaStream_t stream){
+
+    int nBlockx= (m + CHUNKSIZE - 1) / CHUNKSIZE;
+    int nBlocky= (n + CHUNKSIZE - 1) / CHUNKSIZE;
+    dim3 dimBlock(CHUNKSIZE, CHUNKSIZE);
+    dim3 dimGrid(nBlockx, nBlocky);
+
+    if (distance_metric == 0){
+        Dcmg_powexp_nugget_strided_kernel<<<dimGrid, dimBlock, 0, stream>>>(
+        A, m, n, lddm, 
+        l1_x_cuda, l1_y_cuda, 
+        l2_x_cuda, l2_y_cuda, 
+        localtheta[0], localtheta[1], 
+        localtheta[2], localtheta[3],
+        distance_metric);
+    }else{
+        Dcmg_powexp_nugget_strided_kernel_earth_distance<<<dimGrid, dimBlock, 0, stream>>>(
+        A, m, n, lddm, 
+        l1_x_cuda, l1_y_cuda, 
+        l2_x_cuda, l2_y_cuda, 
+        localtheta[0], localtheta[1], 
+        localtheta[2], localtheta[3],
         distance_metric);
     }
 

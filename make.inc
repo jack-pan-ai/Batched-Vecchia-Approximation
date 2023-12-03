@@ -60,7 +60,7 @@ LIB_KBLAS_NAME=kblas-gpu
 NVOPTS = -ccbin $(CXX) --compiler-options -fno-strict-aliasing
 COPTS = -fopenmp
 
-NVOPTS_3 = -DTARGET_SM=$(_CUDA_ARCH_) -arch sm_$(_CUDA_ARCH_) -Xcompiler -fopenmp
+NVOPTS_3 = -DTARGET_SM=$(_CUDA_ARCH_) -allow-unsupported-compiler -arch sm_$(_CUDA_ARCH_) -Xcompiler -fopenmp
 
 #-----------------------------------------
 ifdef _DEBUG_

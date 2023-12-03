@@ -47,14 +47,14 @@ KBLAS_COM_CU += sblas_core.cu dblas_core.cu cblas_core.cu zblas_core.cu
 ALL_OBJ+= $(patsubst %.cu,$(OBJ_DIR)/%.cu_o,$(KBLAS_COM_CU))
 
 $(OBJ_DIR)/%blas_common.cu_o: %blas_common.cu $(DEPS_COM)
-	$(NVCC) $(NVOPTS) $(NVOPTS_3) $(INC) -c $< -o $@
+	$(NVCC) $(NVOPTS) $(NVOPTS_3) $(INC)  -c $< -o $@
 	# $(CXX) $(COPTS) $(INC) -c $< -o $@
 
 $(OBJ_DIR)/%blas_core.cu_o: Xblas_core.cu Xblas_core.ch $(DEPS_COM)
-	$(NVCC) $(NVOPTS) -DPREC_$* $(NVOPTS_3) $(INC) -c $< -o $@
+	$(NVCC) $(NVOPTS)  -DPREC_$* $(NVOPTS_3) $(INC) -c $< -o $@
 
 $(OBJ_DIR)/%_queries.cu_o: %_queries.cu workspace_queries.ch kblas_struct.h $(DEPS_COM)
-	$(NVCC) $(NVOPTS) $(NVOPTS_3) $(INC) -c $< -o $@
+	$(NVCC) $(NVOPTS) $(NVOPTS_3) $(INC)  -c $< -o $@
 
 
 KBLAS_DIR=$(KBLAS_ROOT)/lib

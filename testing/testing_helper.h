@@ -236,6 +236,7 @@ typedef struct kblas_opts
   double sigma;
   double beta;
   double nu;
+  double nugget;
   // bivariate 
   double sigma1;
   double sigma2;

@@ -35,8 +35,13 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
     // the first h_A is only for complement;
     // #pragma omp parallel for
     for (int i=1; i < data->batchCount; i++)
-    {
-        data->h_A[i] = localtheta[0];
+    {   
+        if (data->kernel == 3 && localtheta[3] > 0){
+            // powexp nugget
+            data->h_A[i] = localtheta[0] + localtheta[3];    
+        }else{
+            data->h_A[i] = localtheta[0];
+        }   
     }
 
     ///*************** Covariance matrix generation on GPU *****************//
@@ -79,6 +84,28 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
                     localtheta, data->distance_metric,
                     kblasGetStream(*(data->kblas_handle[g])));
                 cudaDcmg_powexp_strided( 
+                    data->d_A_cross[g] + i * data->lddacon * data->bs, 
+                    data->Acon, data->bs, data->lddacon,
+                    // int m0, int n0, 
+                    data->locations_con_xx_d[g] + i * data->Acon, 
+                    data->locations_con_yy_d[g] + i * data->Acon,
+                    data->locations_xx_d[g] + i * data->bs, 
+                    data->locations_yy_d[g] + i * data->bs, 
+                    localtheta, data->distance_metric,
+                    kblasGetStream(*(data->kblas_handle[g])));
+            }else if (data->kernel == 3) {
+                // exponential power kernel with nugget
+                cudaDcmg_powexp_nugget_strided( 
+                    data->d_A_conditioning[g] + i * data->lddacon * data->Acon, 
+                    data->cs, data->cs, data->lddacon,
+                    // int m0, int n0, 
+                    data->locations_con_xx_d[g] + i * data->cs, 
+                    data->locations_con_yy_d[g] + i * data->cs,
+                    data->locations_con_xx_d[g] + i * data->cs, 
+                    data->locations_con_yy_d[g] + i * data->cs, 
+                    localtheta, data->distance_metric,
+                    kblasGetStream(*(data->kblas_handle[g])));
+                cudaDcmg_powexp_nugget_strided( 
                     data->d_A_cross[g] + i * data->lddacon * data->bs, 
                     data->Acon, data->bs, data->lddacon,
                     // int m0, int n0, 
@@ -416,7 +443,10 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
         if (data->kernel ==1 || data->kernel == 2){
             printf("%dth Model Parameters (Variance, range, smoothness): (%1.8lf, %1.8lf, %1.8lf) -> Loglik: %.18lf \n", 
                 data->iterations, localtheta[0], localtheta[1], localtheta[2], llk); 
-        }else if (data->kernel ==3){
+        }else if(data->kernel == 3){
+            printf("%dth Model Parameters (Variance, range, smoothness, nugget): (%1.8lf, %1.8lf, %1.8lf, %1.8lf) -> Loglik: %.18lf \n", 
+                data->iterations, localtheta[0], localtheta[1], localtheta[2], localtheta[3], llk); 
+        }else if (data->kernel ==4){
             printf("%dth Model Parameters (Variance1, Variance2, range, smoothness1, smoothness2, beta): (%lf, %lf, %lf, %lf, %lf, %lf) -> Loglik: %lf \n", 
                 data->iterations, localtheta[0], localtheta[1], localtheta[2], 
                 localtheta[3], localtheta[4], localtheta[5], llk); 
