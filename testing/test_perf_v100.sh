@@ -9,6 +9,9 @@ do
     done
 done
 
+./bin/test_dvecchia_batch --ikernel 1.0:0.1:0.5 -N 1:1 -s --kernel univariate_matern_stationary_no_nugget --num_loc 16000 --omp_threads 40 --perf --vecchia_cs 500
+./bin/test_dvecchia_batch --ikernel 1.0:0.1:0.5 -N 1:1 -s --kernel univariate_matern_stationary_no_nugget --num_loc 4000 --omp_threads 40 --perf --vecchia_cs 1000
+
 mkdir ./log/v100
 rm ./log/locs*
 mv ./log/perf* ./log/v100

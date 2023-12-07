@@ -98,8 +98,10 @@ void findNearestPoints(double *h_C_conditioned, double *h_C, location* locations
         std::cout << "Not enough points available." << std::endl;
         k = l1 - l0;
     }
+    // printf("=======(%lf, %lf) =======\n", locations->x[l1], locations->y[l1]);
     // printf("-----------------%d------------------\n", l1);
     for (int i = 0; i < k; i++) {
+        // printf("(%lf, %lf)\n", locations->x[indices[i]], locations->y[indices[i]]);
         // printf("%d \n", indices[i]);
         locations_con->x[i_block * k + i] = locations->x[indices[i]];
         locations_con->y[i_block * k + i] = locations->y[indices[i]];
