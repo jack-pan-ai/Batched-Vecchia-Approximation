@@ -233,31 +233,25 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     // random generate with seed as 1
     if (opts.perf == 1){
         // fprintf(stderr, "%d \n", opts.seed);
-        locations = GenerateXYLoc(opts.num_loc, 0/*opts.seed*/); // 1 is the random seed
-        for(int i = 0; i < opts.num_loc; i++) h_C_data[i] = (T) rand()/(T)RAND_MAX;
-        // for(int i = 0; i < opts.num_loc; i++) h_C_data[i] = 0.0;
+        locations = GenerateXYLoc(opts.num_loc, opts.seed); 
+        // for(int i = 0; i < opts.num_loc; i++) h_C_data[i] = (T) rand()/(T)RAND_MAX;
+        for(int i = 0; i < opts.num_loc; i++) h_C_data[i] = 0.0;
         // printLocations(opts.num_loc, locations);
         // printVectorCPU(opts.num_loc, h_C, 1, 1);
         // for(int i = 0; i < Cm * batchCount; i++) printf("%ith %lf \n",i, h_C[i]);
         // // the optimization initial values
         if (opts.kernel == 1 || opts.kernel == 2){
             localtheta_initial = {opts.sigma, opts.beta, opts.nu};
-            ub.push_back(opts.upper_bound);
-            ub.push_back(opts.upper_bound);
-            ub.push_back(opts.upper_bound);
         }else if (opts.kernel == 3){
             localtheta_initial = {opts.sigma, opts.beta, opts.nu, opts.nugget};
-            ub.push_back(opts.upper_bound);
-            ub.push_back(opts.upper_bound);
-            ub.push_back(opts.upper_bound);
-            ub.push_back(opts.upper_bound);
         }
+        for (int i =0; i < opts.num_params; i++) ub.push_back(2);
         // data.distance_metric = 0;
         // for(int i = 0; i < 30; i++) printf("%ith (%lf, %lf, %lf) \n", i, locations->x[i], locations->y[i], h_C_data[i]);
         // exit(0);
         // fprintf(stderr, "%lf, %lf ,%lf \n", localtheta_initial[0], localtheta_initial[1], localtheta_initial[2]);
     }else{
-        // real dataset soil (umcomment it if used)
+        // real dataset wind speed (umcomment it if used)
         std::string xy_path;
         std::string z_path;
         if (opts.num_loc == 250000){
@@ -266,34 +260,19 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
             xy_path = "./wind/meta_train_250000";
             z_path = "./wind/observation_train_250000";
         }
-        // // soil dataset
-        // ub.push_back(2);
-        // ub.push_back(2);
-        // ub.push_back(2);
-        // wind dataset
-        ub.push_back(20);
-        ub.push_back(2);
-        ub.push_back(2);
-        ub.push_back(2);
         data.distance_metric = 1;
-        // // test 
         // std::string xy_path = "./extras/estimation_test/LOC_6400_1";
         // std::string z_path = "./extras/estimation_test/Z_6400_1";
         // data.distance_metric = 0;
-        // ub.push_back(5);
-        // ub.push_back(5);
-        // ub.push_back(5);
-        // ub.push_back(5);
+
+        for (int i =0; i < opts.num_params; i++) ub.push_back(2);
         locations = loadXYcsv(xy_path, opts.num_loc); 
         loadObscsv<T>(z_path, opts.num_loc, h_C_data);
-        // for(int i = 0; i < 30; i++) printf("%ith (%lf, %lf, %lf) \n", i, locations->x[i], locations->y[i], h_C_data[i]);
-        // exit(0);
         if (opts.kernel == 1) {
             localtheta_initial = {opts.lower_bound, opts.lower_bound, opts.nu};
         }else if (opts.kernel == 3) {
             // power exponential with nugget effect
             localtheta_initial = {opts.lower_bound, opts.lower_bound, opts.lower_bound, opts.lower_bound};
-            // localtheta_initial = {1.0, 0.1, 1, 0.1}; // only used for verifcations
         }else{
             // 2: power expoenential 
             localtheta_initial = {opts.lower_bound, opts.lower_bound, opts.lower_bound};
@@ -355,8 +334,9 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
                     con_loc , cs + i * bs, 
                     cs + (i + 1) * bs, cs, i, data.distance_metric
                 );
-                // printLocations(opts.num_loc, locations);
-                // printLocations(cs * i, locations_con);
+                // printLocations(10, locations);
+                // printLocations(cs * (i+1), locations_con);
+                // if (i==0) exit(0);
                 // fprintf(stderr, "asdasda\n");
             }
         }else{
@@ -370,6 +350,9 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
         // point back to the starting;
         locations_con->x -= cs;
         locations_con->y -= cs;
+        // printLocations(opts.num_loc, locations);
+        // printLocations(cs * batchCount, locations_con);
+
         /************* Copy location from CPU to GPU ****************/ 
         for (int g = 0; g < ngpu; g++)
         {

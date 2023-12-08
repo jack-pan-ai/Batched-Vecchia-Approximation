@@ -33,7 +33,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
 
     // covariance matrix generation 
     // the first h_A is only for complement;
-    // #pragma omp parallel for
+    #pragma omp parallel for
     for (int i=1; i < data->batchCount; i++)
     {   
         if (data->kernel == 3 && localtheta[3] > 0){
@@ -208,7 +208,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
         /*
         cholesky decomposition
         */
-        // for (int i = 0; i < 2; i++) // data->batchCount_gpu[g]
+        // for (int i = 0; i < data->batchCount_gpu[g]; i++) // data->batchCount_gpu[g]
         // {
         //     printf("%dth", i);
         //     printMatrixGPU(data->Acon, data->Acon, data->d_A_conditioning[g] + i * data->Acon * data->lddacon, data->lddacon);
