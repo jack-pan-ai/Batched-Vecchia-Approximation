@@ -31,3 +31,6 @@ testing/test_llh.sh
 testing/test_estimation.sh
 testing/test.sh
 testing/test_perf_plot_a100_qaysar.ipynb
+testing/*.ipynb
+
+## plot file
