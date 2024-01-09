@@ -215,6 +215,12 @@ typedef struct kblas_opts
   double sigma;
   double beta;
   double nu;
+  double nugget;
+  // init
+  double sigma_init;
+  double beta_init;
+  double nu_init;
+  double nugget_init;
   // bivariate
   double sigma1;
   double sigma2;
@@ -240,7 +246,6 @@ typedef struct kblas_opts
   int kernel;
   int num_params;
   int num_loc;
-  int seed;
 
   // bivariate
   int p;
@@ -251,6 +256,9 @@ typedef struct kblas_opts
   // ordering
   int randomordering;
   int mortonordering;
+  int kdtreeordering;
+  int hilbertordering;
+  int mmdordering;
 
   // irregular grid
   int seed;

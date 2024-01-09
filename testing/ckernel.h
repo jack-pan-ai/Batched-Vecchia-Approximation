@@ -23,6 +23,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #define assert(ignore)((void) 0)
+#include <cstring>
 
 
 #ifdef __cplusplus
@@ -90,8 +91,6 @@ static uint32_t DecodeMorton2Y(uint32_t code)
 }
 
 
-
-
 double uniform_distribution(double rangeLow, double rangeHigh);
 
 
@@ -129,9 +128,49 @@ static void zsort_locations(int n, location *locations)
         locations->y[i] = (double) y / (double) UINT16_MAX;
     }
 }
+struct comb { // location and measure
+    uint32_t z;
+    double w;
+};
+
+static int cmpfunc_loc (const void * a, const void * b) {
+    struct comb _a = *(const struct comb *)a;
+    struct comb _b = *(const struct comb *)b;
+    if(_a.z < _b.z) return -1;
+    if(_a.z == _b.z) return 0;
+    return 1;
+}
+
+static void zsort_reordering(int n, location * locations, double * w)
+//! Sort in Morton order (input points must be in [0;1]x[0;1] square])
+{
+    int i;
+    int n_measurement = 1;
+    uint16_t x, y;
+    struct comb *dat = (struct comb *) malloc (n * n_measurement * sizeof(struct comb));
+    // Encode data into vector z
+    for(i = 0; i < n; i++)
+    {
+        x = (uint16_t)(locations->x[i]*(double)UINT16_MAX +.5);
+        y = (uint16_t)(locations->y[i]*(double)UINT16_MAX +.5);
+        dat[i].z = EncodeMorton2(x, y);
+        dat[i].w = w[i];
+    }
+    // Sort vector z
+    qsort(dat, n, sizeof(struct comb), cmpfunc_loc);
+    // Decode data from vector z
+    for(i = 0; i < n; i++)
+    {
+        x = DecodeMorton2X(dat[i].z);
+        y = DecodeMorton2Y(dat[i].z);
+        locations->x[i] = (double)x/(double)UINT16_MAX;
+        locations->y[i] = (double)y/(double)UINT16_MAX;
+        w[i] = dat[i].w;
+    }
+}
 
 // random ordering
-static void random_locations(int size, location* loc, double* h_C) {
+static void random_reordering(int size, location* loc, double* h_C) {
     int your_seed_value = 42; // Set your desired seed value
 
     srand(your_seed_value);
@@ -154,6 +193,302 @@ static void random_locations(int size, location* loc, double* h_C) {
         h_C[i] = h_C[j];
         h_C[j] = tempObs;
 
+    }
+}
+
+//kd tree
+struct tree {
+    int dim;
+    double x, y;
+    double w;
+    struct tree *left, *right;
+};
+
+struct arr {
+    double x, y;
+    double w;
+};
+
+static int cmpfunc_x (const void * a, const void * b) {
+    struct arr _a = *(const struct arr *)a;
+    struct arr _b = *(const struct arr *)b;
+    if(_a.x < _b.x) return -1;
+    if(_a.x == _b.x) return 0;
+    return 1;
+}
+
+static int cmpfunc_y (const void * a, const void * b) {
+    struct arr _a = *(const struct arr *)a;
+    struct arr _b = *(const struct arr *)b;
+    if(_a.y < _b.y) return -1;
+    if(_a.y == _b.y) return 0;
+    return 1;
+}
+
+static struct tree *initialize(int len, struct arr *dat, int depth) {
+    if (len < 1)
+        return NULL;
+    if (len == 1) {
+        struct tree *root = (struct tree *)malloc(sizeof(struct tree));
+        root->dim = -1;
+        root->x = dat[0].x;
+        root->y = dat[0].y;
+        root->w = dat[0].w;
+        root->left = NULL;
+        root->right = NULL;
+        return root;
+    }
+    struct tree *root = (struct tree *)malloc(sizeof(struct tree));
+    //int dim = (x[end] - x[start] > y[end] - y[start]) ? 1 : 2;
+    int dim = depth % 2;
+    root->dim = dim;
+    int mid = len / 2;
+    if (dim == 0)
+        qsort(dat, len, sizeof(struct arr), cmpfunc_x);
+    else
+        qsort(dat, len, sizeof(struct arr), cmpfunc_y);
+    //root->len = len;
+    if (dim == 0)
+        root->x = dat[mid].x;
+    else if (dim == 1)
+        root->y = dat[mid].y;
+    struct arr *ldat = (struct arr *)malloc(mid*sizeof(struct arr));
+    struct arr *rdat = (struct arr *)malloc((len-mid)*sizeof(struct arr));
+    memcpy(ldat, dat, mid*sizeof(struct arr));
+    memcpy(rdat, dat+mid, (len-mid)*sizeof(struct arr));
+    free(dat);
+    root->left = initialize(mid, ldat, depth+1);
+    root->right = initialize(len-mid, rdat, depth+1);
+    //root->left_l = root->right_l = NULL;
+    return root;
+}
+
+static int traverse(struct tree *root, int i, double *x, double *y, double *w) {
+    if (root->left != NULL)
+        i = traverse(root->left, i, x, y, w);
+    if (root->dim == -1) {
+        //printf("%d\n", i);
+        x[i] = root->x;
+        y[i] = root->y;
+        w[i++] = root->w;
+    }
+    if (root->right != NULL)
+        i = traverse(root->right, i, x, y, w);
+    return i;
+}
+
+static void zsort_locations_kdtree(int n, location * locations, double *w)
+//! Sort in KD-Tree order (input points must be in [0;1]x[0;1] square])
+{
+    // Some sorting, required by spatial statistics code
+    int i;
+    struct arr *dat = (struct arr *)malloc(n*sizeof(struct arr));
+    double x[n], y[n];
+    //double *w2 = (double *) malloc (n * sizeof(double));
+
+    // Encode data into vector z
+
+    for(i = 0; i < n; i++)
+    {
+        dat[i].x = locations->x[i];
+        dat[i].y = locations->y[i];
+        dat[i].w = w[i];
+    }
+    struct tree *root = initialize(n, dat, 0);
+    int index = traverse(root, 0, x, y, w);
+    //printf("traversed\n");
+
+    for(i = 0; i < n; i++)
+    {
+        locations->x[i] = x[i];
+        locations->y[i] = y[i];
+    }
+}
+
+// hilbert ordering
+static uint32_t EncodeHilbert2(uint32_t x, uint32_t y) {
+    uint32_t M = 1 << 15, P, Q, t;
+    for( Q = M; Q > 1; Q >>= 1 ) {
+        P = Q - 1;
+        if( x & Q ) x ^= P;
+        else{ t = (x^x) & P; x ^= t; x ^= t; }
+        if( y & Q ) x ^= P;
+        else{ t = (x^y) & P; x ^= t; y ^= t; }
+    }
+    y ^= x;
+    t = 0;
+    for( Q = M; Q > 1; Q >>= 1 )
+        if( y & Q ) t ^= Q-1;
+    x ^= t;
+    y ^= t;
+    uint32_t result = 0;
+    uint32_t res;
+    for (int i = 0; i < 16; i++) {
+        res = x >> (15-i) & 1;
+        result |= res << (31-i*2);
+        res = y >> (15-i) & 1;
+        result |= res << (31-(i*2+1));
+    }
+    return result;
+}
+
+
+static uint32_t* DecodeHilbert2(uint32_t result) {
+    uint32_t N = 2 << 15, P, Q, t;
+    uint32_t x = 0, y = 0;
+    static uint32_t X[2] = {0, 0};
+    uint32_t res;
+    for (int i = 0; i < 16; i++) {
+        res = result >> 31;
+        result = result << 1;
+        x |= res << (15-i);
+        res = result >> 31;
+        result = result << 1;
+        y |= res << (15-i);
+    }
+    t = y >> 1;
+    y ^= x;
+    x ^= t;
+    for( Q = 2; Q != N; Q <<= 1 ) {
+        P = Q - 1;
+        if( y & Q ) x ^= P;
+        else{ t = (x^y) & P; x ^= t; y ^= t; }
+        if( x & Q ) x ^= P;
+        else{ t = (x^x) & P; x ^= t; x ^= t; }
+    }
+    X[0] = x;
+    X[1] = y;
+    return X;
+}
+
+static void zsort_locations_hilbert(int n, location * locations, double * w)
+//! Sort in Hilbert order (input points must be in [0;1]x[0;1] square])
+{
+    // Some sorting, required by spatial statistics code
+    int i;
+    uint16_t x, y;
+    //uint32_t z[n]; //, z2[n];
+    //double *w2 = (double *) malloc (n * n_measurement * sizeof(double));
+    int n_measurement = 1;
+    struct comb *dat = (struct comb *) malloc (n * n_measurement * sizeof(struct comb));
+    // double sumxb = 0, sumyb = 0, sumxa = 0 , sumya = 0;
+    // Encode data into vector z
+
+    // printf("\nlocations x unsorted: ");
+    // for (i = 0; i < n; i++)
+    //     printf("%f, ", locations->x[i]);
+    // printf("\nlocations y unsorted: ");
+    // for (i = 0; i < n; i++)
+    //     printf("%f, ", locations->y[i]);
+
+    for(i = 0; i < n; i++)
+    {
+        x = (uint16_t)(locations->x[i]*(double)UINT16_MAX +.5);
+        y = (uint16_t)(locations->y[i]*(double)UINT16_MAX +.5);
+        dat[i].z = EncodeHilbert2(x, y);
+        dat[i].w = w[i];
+    }
+    //memcpy(w2, w, n*sizeof(double));
+    //memcpy(z2, z, n*sizeof(uint32_t));
+    // Sort vector z
+    qsort(dat, n, sizeof(struct comb), cmpfunc_loc);
+    // Decode data from vector z
+    for(i = 0; i < n; i++)
+    {
+        //x = DecodeMorton2X(z[i]);
+        //y = DecodeMorton2Y(z[i]);
+        uint32_t* X = DecodeHilbert2(dat[i].z);
+        x = *X;
+        y = *(X+1);
+        locations->x[i] = (double)x/(double)UINT16_MAX;
+        locations->y[i] = (double)y/(double)UINT16_MAX;
+        w[i] = dat[i].w;
+            // sumxa += locations->x[i];
+        // sumya += locations->y[i];
+        //printf("%lu (%u %u) -> %f %f\n", z[i], x, y, points[i], points[i+n]);
+    }
+    //printf( "%f - %f - %f - %f\n", sumxb, sumxa, sumyb, sumya);
+    /*
+    memcpy(w2, w, n * n_measurement * sizeof(double));
+    for (i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
+            if (z[i] == z2[j]) {
+                for (int k = 0; k < n_measurement; k++) {
+                    w[i * n_measurement + k] = *(w2 + j * n_measurement + k);
+                }
+            }
+        }
+    }
+    free(w2);
+    */
+}
+
+//mmd
+static void zsort_locations_mmd(int n, location * locations, double * w)
+//! Sort in MMD order (input points must be in [0;1]x[0;1] square])
+{
+    int res[n], flag[n];
+    struct arr *dat = (struct arr *)malloc(n*sizeof(struct arr));
+    int n_measurement = 1;
+
+    for(int i = 0; i < n; i++)
+    {
+        dat[i].x = locations->x[i];
+        dat[i].y = locations->y[i];
+        dat[i].w = w[i];
+    }
+    double mindist = 2, x_mean = 0, y_mean = 0;
+    for (int i = 0; i < n; i++) {
+        x_mean = x_mean + dat[i].x;
+        y_mean = y_mean + dat[i].y;
+    }
+    x_mean = x_mean / n;
+    y_mean = y_mean / n;
+
+    for (int i = 0; i < n; i++) {
+        flag[i] = 0;
+        double dist = pow(dat[i].x - x_mean, 2) + pow(dat[i].y - y_mean, 2);
+        if (dist < mindist) {
+            mindist = dist;
+            res[0] = i;
+        }
+    }
+    flag[res[0]] = 1;
+    
+    for (int j = 1; j < n - 1; j++) {
+        double max_list[n];
+        for (int i = 0; i < n; i++) {
+            if (flag[i] != 1) {
+                //double min_list[j];
+                double min_temp = 2;
+                for (int k = 0; k < j; k++) {
+                    double temp = pow(dat[i].x - dat[res[k]].x, 2) + pow(dat[i].y - dat[res[k]].y, 2);
+                    if (temp < min_temp)
+                        min_temp = temp;
+                }
+                max_list[i] = min_temp;
+            }
+            else
+                max_list[i] = 0;
+        }
+        double max_temp = 0;
+        int ind_temp = n;
+        for (int i = 0; i < n; i++) {
+            if (max_temp < max_list[i]) {
+                max_temp = max_list[i];
+                ind_temp = i;
+            }
+        }
+        res[j] = ind_temp;
+        flag[res[j]] = 1;
+    }
+
+    for (int i = 0; i < n; i++) {
+        if (flag[i] != 1)
+            res[n-1] = i;
+        locations->x[i] = dat[res[i]].x;
+        locations->y[i] = dat[res[i]].y;
+        w[i] = dat[res[i]].w;
     }
 }
 

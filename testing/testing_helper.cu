@@ -173,13 +173,20 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
   opts->sigma     = 0.1;
   opts->beta     = 0.1;
   opts->nu     = 0.1;
+  opts->nugget = 0.0;
+
+  // local theta for kernel in GPs
+  opts->sigma_init     = 0.01;
+  opts->beta_init     = 0.01;
+  opts->nu_init     = 0.01;
+  opts->nugget_init = 0.01;
+
   // bivariate
   opts->sigma1     = 0.1;
   opts->sigma2     = 0.1;
   opts->alpha     = 0.1;
   opts->nu1     = 0.1;
   opts->nu2     = 0.1;
-  opts->beta     = 0.1;
   
   // performance test
   opts->perf = 0;
@@ -190,10 +197,10 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
   opts->test =0;
 
   // optimization setting
-  opts->tol = 1e-5;
-  opts->maxiter = 1000;
+  opts->tol = 1e-9;
+  opts->maxiter = 2000;
   opts->lower_bound = 0.01;
-  opts->upper_bound = 2.;
+  opts->upper_bound = 3.;
 
   // openmp
   opts->omp_numthreads = 40;
@@ -201,7 +208,7 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
   //extra config
   opts->kernel = 1;
   opts->num_params = 3;
-  opts->num_loc = 40000;
+  opts->num_loc = 20000;
 
   // bivariate 
   opts->p = 1; // univaraite
@@ -210,7 +217,11 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
   opts->knn = 0;
 
   // random ordering
-  opts->randomordering = 1;
+  opts->randomordering = 0;
+  opts->mortonordering = 1;
+  opts->kdtreeordering = 0;
+  opts->hilbertordering = 0;
+  opts->mmdordering = 0;
 
   // irregular locations generation 
   opts->seed = 0;
@@ -333,7 +344,7 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
       i++;
       int num;
       info = sscanf( argv[i], "%d", &num);
-      if( info == 1 && num > 0 ){
+      if( info == 1 && num >= 0 ){
         opts->vecchia_cs = num;
         opts->vecchia = 1;
       // }else if(info == 1 && num == 0){
@@ -404,7 +415,12 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
             opts->kernel = 2; // Change as per your requirement for 'powexp'
             opts->num_params = 3; // Set appropriate values for the 'powexp' kernel
             opts->p = 1; // Modify as needed for 'powexp'
-        } else {
+        } else if (strcmp(kernel_str, "univariate_powexp_nugget_stationary") == 0) {
+          fprintf(stderr, "You are using the Power exponential Kernel with nugget (sigma^2, range, smooth, nugget)!\n");
+          opts->kernel = 3; // 
+          opts->num_params = 4; // 
+          opts->p = 1; // Modify as needed for 'powexp'
+        }else {
             fprintf(stderr, "Unsupported kernel type: %s\n", kernel_str);
             exit(1);
         }
@@ -415,46 +431,97 @@ extern "C" int parse_opts(int argc, char** argv, kblas_opts *opts)
       info = sscanf( argv[i], "%d", &num_loc);
       opts->num_loc=num_loc;
     }
-    else if ( (strcmp("--zvecs",   argv[i]) == 0) && i+1 < argc ) {
-      i++;
-      int zvecs;
-      info = sscanf( argv[i], "%d", &zvecs);
-      if( info == 1 && zvecs <= 10000 ){
-        opts->zvecs=zvecs;
-      }else{
-        fprintf( stderr, "Your dataset does not contain the replicate more than 50!");
-        exit(1);
-      }
-    }
     // k nearest neighbors
     else if ( strcmp("--knn", argv[i]) == 0 ) {
       opts->knn  = 1; 
     }
     // ordering 
-    else if ( strcmp("--randomordering", argv[i]) == 0 ) {
-      opts->randomordering  = 1; 
+    else if ( strcmp("--randomordering", argv[i]) == 0 ){
+      opts->randomordering  = 1;
+      opts->mortonordering  = 0;
+      opts->kdtreeordering  = 0;
+      opts->hilbertordering = 0;
+      opts->mmdordering = 0;
+    }
+    else if ( strcmp("--kdtreeordering", argv[i]) == 0 ){
+      opts->randomordering  = 0;
+      opts->mortonordering  = 0;
+      opts->kdtreeordering  = 1;
+      opts->hilbertordering = 0;
+      opts->mmdordering = 0;
+    }
+    else if ( strcmp("--hilbertordering", argv[i]) == 0 ){
+      opts->randomordering  = 0;
+      opts->mortonordering  = 0;
+      opts->kdtreeordering  = 0;
+      opts->hilbertordering = 1;
+      opts->mmdordering = 0;
+    }
+    else if ( strcmp("--mmdordering", argv[i]) == 0 ){
+      opts->randomordering  = 0;
+      opts->mortonordering  = 0;
+      opts->kdtreeordering  = 0;
+      opts->hilbertordering = 0;
+      opts->mmdordering = 1;
     }
     // ture parameters
     else if ( strcmp("--ikernel", argv[i]) == 0 && i+1 < argc ) {
+       i++;
+     double a1 = -1, a2 = -1, a3 = -1, a4 = -1; // Initialize with default values indicating 'unknown'
+     char s1[10], s2[10], s3[10], s4[10]; // Arrays to hold the string representations
+     // Parse the input into string buffers
+     int info = sscanf(argv[i], "%9[^:]:%9[^:]:%9[^:]:%9[^:]", s1, s2, s3, s4);
+     if (info < 3 || info > 4) {
+       printf("Other kernels have been developing on the way!");
+       exit(0);
+     }
+     // Check and convert each value
+     if (strcmp(s1, "?") != 0) a1 = atof(s1);
+     if (strcmp(s2, "?") != 0) a2 = atof(s2);
+     if (strcmp(s3, "?") != 0) a3 = atof(s3);
+     if ( info == 4){
+       if (strcmp(s4, "?") != 0) a4 = atof(s4);
+     } 
+     // Assign values to opts if they are not unknown
+     if (a1 != -1) opts->sigma = a1;
+     if (a2 != -1) opts->beta = a2;
+     if (a3 != -1) opts->nu = a3;
+     if ( info == 4){
+       if (a4 != -1) opts->nugget = a4;
+     } 
+    }
+    // initi parameters
+    else if ( strcmp("--kernel_init", argv[i]) == 0 && i+1 < argc ) {
+       i++;
+     double a1 = -1, a2 = -1, a3 = -1, a4 = -1; // Initialize with default values indicating 'unknown'
+     char s1[10], s2[10], s3[10], s4[10]; // Arrays to hold the string representations
+     // Parse the input into string buffers
+     int info = sscanf(argv[i], "%9[^:]:%9[^:]:%9[^:]:%9[^:]", s1, s2, s3, s4);
+     if (info < 3 || info > 4) {
+       printf("Other kernels have been developing on the way!");
+       exit(0);
+     }
+     // Check and convert each value
+     if (strcmp(s1, "?") != 0) a1 = atof(s1);
+     if (strcmp(s2, "?") != 0) a2 = atof(s2);
+     if (strcmp(s3, "?") != 0) a3 = atof(s3);
+     if ( info == 4){
+       if (strcmp(s4, "?") != 0) a4 = atof(s4);
+     } 
+     // Assign values to opts if they are not unknown
+     if (a1 != -1) opts->sigma_init = a1;
+     if (a2 != -1) opts->beta_init = a2;
+     if (a3 != -1) opts->nu_init = a3;
+     if ( info == 4){
+       if (a4 != -1) opts->nugget_init = a4;
+     } 
+    }
+    // iiregular locations generation seeds
+    else if ( (strcmp("--seed",   argv[i]) == 0) && i+1 < argc ) {
       i++;
-      double a1, a2, a3, a4, a5, a6;
-      info = sscanf( argv[i], "%lf:%lf:%lf:%lf:%lf:%lf", &a1, &a2, &a3, &a4, &a5, &a6);
-      if ( info == 3 ) {
-        fprintf(stderr, "You are using the Matern Kernel in the univariate case now!\n");
-        opts->sigma = a1;
-        opts->beta = a2;
-        opts->nu = a3;
-      }else if (info ==6){
-        fprintf(stderr, "You are using the Parsimonious Matern Kernel in the bivariate case now!\n");
-        opts->sigma1 = a1;
-        opts->sigma2 = a2;
-        opts->alpha = a3;
-        opts->nu1 = a4;
-        opts->nu2 = a5;
-        opts->beta = a6;
-      }else{
-        printf("Other kernels have been developing on the way!");
-      }
+      int seed;
+      info = sscanf( argv[i], "%d", &seed);
+      opts->seed=seed;
     }
     // ----- usage
     else if ( strcmp("-h",     argv[i]) == 0 || strcmp("--help", argv[i]) == 0 ) {

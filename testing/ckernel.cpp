@@ -1040,10 +1040,16 @@ void core_dcmg(double* A, int m, int n,
 			if (expr == 0)
 				A[i + j * m] = sigma_square /*+ 1e-4*/;
 			else
-				A[i + j * m] = con * pow(expr, localtheta[2])
+				A[i + j * m] = con * pow(expr, localtheta[2]) 
 					* gsl_sf_bessel_Knu(localtheta[2], expr); // Matern Function
+			// double aa = sigma_square * (1 + expr) * exp(-expr);
+			// fprintf(stderr, "%d th location: (%lf, %lf) (%lf, %lf) and distance %lf,  covariance: %lf covaraince %lf \n", 
+			// 			i, 
+			// 			l1->x[i0], l1->y[i0], 
+			// 			l2->x[j0], l2->y[j0], 
+			// 			expr,
+			// 			A[i0 + j0 * m], aa);
 			j0++;
-			// printf("%lf\n", A[i + j * m]);
 		}
 		i0++;
 	}

@@ -52,13 +52,13 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
 
 
     // covariance matrix generation 
+    // printf("x_copy is %lf \n",data->locations_copy->x[0]);
+    // loc_batch: for example, p(y1|y2), the locations of y1 is the loc_batch
     #pragma omp parallel for
-    for (int i=0; i <= data->batchCount; i++)
+    for (size_t i=0; i <= data->batchCount; i++)
     {
-        // printf("x_copy is %lf \n",data->locations_copy->x[0]);
-        // loc_batch: for example, p(y1|y2), the locations of y1 is the loc_batch
-        location* loc_batch= (location *) malloc(sizeof (location));
         // h_A: \sigma_{11}
+        location* loc_batch= (location *) malloc(sizeof (location));
         if (i == 0){
             if (data->size_first != 0){
                 // Boundary case
@@ -123,12 +123,12 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
         free(loc_batch);
     }
     // h_A_cross: \sigma_{12} and h_A_conditioning: \sigma_{22}
-    if (data->vecchia)
+    if (data->vecchia && data->cs > 0)
     {   
-        // printVectorCPU(data->bs, data->h_C, data->ldc, 0);
         #pragma omp parallel for
-        for (int i=0; i < data->batchCount; i++)
+        for (size_t i=0; i < data->batchCount; i++)
         {
+            // printVectorCPU(data->bs, data->h_C, data->ldc, 0);
             // for example, p(y1|y2), the locations of y2 is the loc_batch_con
             location* loc_batch_con= (location *) malloc(sizeof (location));
             location* loc_batch= (location *) malloc(sizeof (location));
@@ -148,52 +148,27 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
                         data->cs, data->bs,
                         loc_batch_con,
                         loc_batch, localtheta, data->distance_metric);
-            // if (data->kernel == 1){
-            //     // *h_A_conditioning: \sigma_{22}
-            //     core_dcmg(data->h_A_conditioning + i * data->Acon * data->ldacon,
-            //                 data->ldacon, data->Acon,
-            //                 loc_batch_con,
-            //                 loc_batch_con, localtheta, data->distance_metric);
-            //     // *h_A_cross: \sigma_{21}
-            //     core_dcmg(data->h_A_cross + i * data->An * data->ldacon,
-            //                 data->ldacon, data->An,
-            //                 loc_batch_con,
-            //                 loc_batch, localtheta, data->distance_metric);
-            // }else if (data->kernel == 2){
-            //     // *h_A_conditioning: \sigma_{22}
-            //     core_dcmg_bivariate_parsimonious(data->h_A_conditioning + i * data->Acon * data->ldacon,
-            //                                     data->ldacon, data->Acon,
-            //                                     loc_batch_con,
-            //                                     loc_batch_con, localtheta, data->distance_metric);
-            //     // *h_A_cross: \sigma_{21}
-            //     core_dcmg_bivariate_parsimonious(data->h_A_cross + i * data->An * data->ldacon,
-            //                                     data->ldacon, data->An,
-            //                                     loc_batch_con,
-            //                                     loc_batch, localtheta, data->distance_metric);
-            // }else{
-            //     printf("The other kernel function has been developed.");
-            //     exit(0);
+            // printf("The conditioning covariance matrix.\n");
+            // printMatrixCPU(data->M, data->M, data->h_A_cross + i * data->An * data->lda, data->lda, i);
+            // if (i == (data->batchCount - 1)) {
+            //     printLocations(data->cs, loc_batch_con); 
+            //     printMatrixCPU(data->cs, data->cs, data->h_A_conditioning + i * data->Acon * data->ldacon, data->ldacon, i);
+            //     // exit(0);
             // }
             free(loc_batch);
             free(loc_batch_con);
-            //matrix size: data->lda by data->An
-            // printf("The conditioning covariance matrix.\n");
-            // printMatrixCPU(data->M, data->M, data->h_A_cross + i * data->An * data->lda, data->lda, i);
-            // printMatrixCPU(data->M, data->M, data->h_A_conditioning + i * data->Acon * data->ldacon, data->ldacon, i);
         }
     }
     // printVectorCPU(data->bs, data->h_C, data->ldc, 0);
     clock_gettime(CLOCK_MONOTONIC, &end_dcmg);
     dcmg_time = end_dcmg.tv_sec - start_dcmg.tv_sec + (end_dcmg.tv_nsec - start_dcmg.tv_nsec) / 1e9;
     // printf("[info] Covariance Generation with time %lf seconds. \n", dcmg_time);
-    /*
-    Xrand_matrix(data->Am, data->An * data->batchCount, data->h_A, data->lda);
-    for (int i = 0; i < data->batchCount; i++)
-    {
-        Xmatrix_make_hpd(data->Am, data->h_A + i * data->An * data->lda, data->lda);
-        // printMatrixCPU(data->M, data->M, data->h_A, data->lda, i);
-    }
-    */
+    // Xrand_matrix(data->Am, data->An * data->batchCount, data->h_A, data->lda);
+    // for (int i = 0; i < data->batchCount; i++)
+    // {
+    //     // Xmatrix_make_hpd(data->Am, data->h_A + i * data->An * data->lda, data->lda);
+    //     printMatrixCPU(data->M, data->M, data->h_A, data->lda, i);
+    // }
     // Xrand_matrix(data->Cm, data->Cn * data->batchCount, data->h_C, data->ldc);
     // printMatrixCPU(data->M, data->M, data->h_A, data->lda, i);
     // covariance matrix copt from host to device
@@ -254,7 +229,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
         }
         */
     }
-    if (data->vecchia)
+    if (data->vecchia && data->cs > 0)
     {   
         // printf("[info] The vecchia offset is starting now!\n");
         // extra memory for mu
@@ -262,6 +237,12 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
         //                                         h_mu + data->Cm * data->Cn * data->batchCount_gpu * g, data->ldc,
         //                                         d_mu_copy[g], data->lddc, kblasGetStream(*(data->kblas_handle[g]))));
         // conditioning part 1.1, matrix copy from host to device
+        // printMatrixCPU(data->cs, data->cs, data->h_A_first, data->cs, 0);
+        // for (int i = 1; i <= data->batchCount; i++)
+        // {
+        //     // Xmatrix_make_hpd(data->Am, data->h_A + i * data->An * data->lda, data->lda);
+        //     printMatrixCPU(data->cs, data->cs, data->h_A_conditioning + (i -1 )* data->cs*data->cs,  data->cs, i);
+        // }
         for (int g = 0; g < data->ngpu; g++)
         {
             check_error(cudaSetDevice(data->devices[g]));
@@ -318,7 +299,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
                 // data->Acon*2 instead of data->Acon is because for some cases, 
                 // like 320/20 combination, 320 batchszie 20 batch count, cannot 
                 // be allocated enough memory. But the reason is unclear now.
-                kblas_potrf_batch_strided_wsquery(*(data->kblas_handle[g]), data->cs*2, data->batchCount_gpu);
+                kblas_potrf_batch_strided_wsquery(*(data->kblas_handle[g]), data->cs*2, data->batchCount_gpu*30);
                 kblas_trsm_batch_strided_wsquery(*(data->kblas_handle[g]), 'L', data->cs, data->N, data->batchCount_gpu);
                 kblas_gemm_batch_strided_wsquery(*(data->kblas_handle[g]), data->batchCount_gpu);
             }
@@ -512,8 +493,10 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
             */
             if (data->strided)
             {   
-                for (int i = 0; i < data->batchCount_gpu; i++)
-                {
+                // if the first size ==0, then the first batch is independent log-likelihood 
+                int start = (data->size_first == 0 && g == 0) ? 1: 0; 
+                for (int i = start; i < data->batchCount_gpu; i++)
+                {   
                     check_cublas_error(cublasXgeam(kblasGetCublasHandle(*(data->kblas_handle[g])),
                                         CUBLAS_OP_N, CUBLAS_OP_N,
                                         data->Am, data->An,
@@ -535,7 +518,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
                                         data->Cm, data->Cn,
                                         &alpha_1, // 1
                                         data->d_C[g] + data->lddc * data->Cn * i, data->lddc,
-                                        &beta_n1, // -1
+                                        &beta_n1, // -1, here is the y - E(y)
                                         data->d_mu_offset[g] + data->lddc * data->Cn * i, data->lddc,
                                         data->d_C[g] + data->lddc * data->Cn * i, data->lddc));
                     // printf("The results before TRSM \n");
@@ -701,7 +684,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
         // printf("[info] Starting triangular solver. \n");
         // printf("The results before TRSM.");
         // printMatrixGPU(data->M, data->M, data->d_A[0] + data->An * data->ldda, data->ldda);
-        // for(int i=0; i<data->batchCount_gpu; i++){
+        // for(size_t i=0; i<data->batchCount_gpu; i++){
         //     printVecGPU(data->Cm, data->Cn, data->d_C[g] + i * data->Cn * data->lddc, data->ldc, i);
         // }
         // for (int i = 0; i < data->batchCount_gpu; i++)
@@ -731,7 +714,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
                                                         data->d_C[g], data->lddc, data->Cn * data->lddc,
                                                         data->batchCount_gpu));
         }
-        // for(int i=0; i<data->batchCount_gpu; i++){
+        // for(size_t i=0; i<data->batchCount_gpu; i++){
         //     printVecGPU(data->Cm, data->Cn, data->d_C[g] + i * data->Cn * data->lddc, data->ldc, i);
         // }
         /* TODO
@@ -840,16 +823,13 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
     // // printf("(Estimated) Sigma: %lf beta:  %lf  nu: %lf\n", localtheta[0], localtheta[1], localtheta[2]);
     // printf("Log likelihood is %lf \n", llk);
     if (data->perf != 1){
-        saveLogFileParams(data->iterations, 
-                        localtheta, llk, 
-                        indep_time + vecchia_time, dcmg_time, 
-                        data->num_loc, data->M,
-                        data->seed, data->p,
-                        data->vecchia_cs); // this is log_tags for write a file
-        if (data->kernel ==1){
-            printf("%dth Model Parameters (Variance, range, smoothness): (%lf, %lf, %lf) -> Loglik: %lf \n", 
+        if (data->kernel ==1 || data->kernel == 2){
+            printf("%dth Model Parameters (Variance, range, smoothness): (%1.8lf, %1.8lf, %1.8lf) -> Loglik: %.18lf \n", 
                 data->iterations, localtheta[0], localtheta[1], localtheta[2], llk); 
-        }else if (data->kernel ==2){
+        }else if(data->kernel == 3){
+            printf("%dth Model Parameters (Variance, range, smoothness, nugget): (%1.8lf, %1.8lf, %1.8lf, %1.8lf) -> Loglik: %.18lf \n", 
+                data->iterations, localtheta[0], localtheta[1], localtheta[2], localtheta[3], llk); 
+        }else if (data->kernel ==4){
             printf("%dth Model Parameters (Variance1, Variance2, range, smoothness1, smoothness2, beta): (%lf, %lf, %lf, %lf, %lf, %lf) -> Loglik: %lf \n", 
                 data->iterations, localtheta[0], localtheta[1], localtheta[2], 
                 localtheta[3], localtheta[4], localtheta[5], llk); 
@@ -858,7 +838,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
     data->iterations += 1;
     data->vecchia_time_total += (indep_time + vecchia_time);  
     // printf("-----------------------------------------------------------------------------\n");
-
+    data->h_C = data->h_C - data->size_first;
     // if (data->vecchia){
     //     // init for each iteration (necessary but low efficient)
     //     cudaFreeHost(data->locations_copy->x);

@@ -23,10 +23,17 @@ testing/dat1_base_6k/
 # bash file
 testing/fig
 testing/log
+testing/trash
 
+# dataset
+testing/simu_ds
 testing/soil_moist
+testing/a.csv
 
 # test bash files
 testing/test_llh.sh
 testing/test_estimation.sh
 testing/test.sh
+testing/test_ordering.sh
+testing/test_llh.sh
+testing/test_perf.sh
