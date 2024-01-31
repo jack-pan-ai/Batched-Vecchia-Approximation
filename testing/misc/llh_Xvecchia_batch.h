@@ -33,7 +33,7 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
 
     // covariance matrix generation 
     // the first h_A is only for complement;
-    #pragma omp parallel for
+    // #pragma omp parallel for
     for (int i=1; i < data->batchCount; i++)
     {   
         if (data->kernel == 3 && localtheta[3] > 0){
@@ -48,30 +48,32 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
     for (int g = 0; g < data->ngpu; g++)
     {
         check_error(cudaSetDevice(data->devices[g]));
-        for (long long i = 0; i < data->batchCount_gpu[g]; i++){
-            if (data->kernel == 1){
-                // matern kernel with fixed nu
-                cudaDcmg_matern135_2_strided( 
-                    data->d_A_conditioning[g] + i * data->lddacon * data->Acon, 
-                    data->cs, data->cs, data->lddacon,
-                    // int m0, int n0, 
-                    data->locations_con_xx_d[g] + i * data->cs, 
-                    data->locations_con_yy_d[g] + i * data->cs,
-                    data->locations_con_xx_d[g] + i * data->cs, 
-                    data->locations_con_yy_d[g] + i * data->cs, 
-                    localtheta, data->distance_metric,
-                    kblasGetStream(*(data->kblas_handle[g])));
-                cudaDcmg_matern135_2_strided( 
-                    data->d_A_cross[g] + i * data->lddacon * data->bs, 
-                    data->Acon, data->bs, data->lddacon,
-                    // int m0, int n0, 
-                    data->locations_con_xx_d[g] + i * data->Acon, 
-                    data->locations_con_yy_d[g] + i * data->Acon,
-                    data->locations_xx_d[g] + i * data->bs, 
-                    data->locations_yy_d[g] + i * data->bs, 
-                    localtheta, data->distance_metric,
-                    kblasGetStream(*(data->kblas_handle[g])));
-            }else if (data->kernel == 2) {
+        if (data->kernel == 1){
+            // matern kernel with fixed nu
+            cudaDcmg_matern135_2_strided(
+                data->d_A_conditioning[g], 
+                data->cs, data->cs, data->lddacon, data->Acon,
+                // int m0, int n0, 
+                data->locations_con_xx_d[g], 
+                data->locations_con_yy_d[g],
+                data->locations_con_xx_d[g], 
+                data->locations_con_yy_d[g], 
+                localtheta, data->distance_metric,
+                data->batchCount_gpu[g],
+                kblasGetStream(*(data->kblas_handle[g])));
+            cudaDcmg_matern135_2_strided( 
+                data->d_A_cross[g], 
+                data->Acon, data->bs, data->lddacon, data->Acon,
+                // int m0, int n0, 
+                data->locations_con_xx_d[g], 
+                data->locations_con_yy_d[g],
+                data->locations_xx_d[g], 
+                data->locations_yy_d[g], 
+                localtheta, data->distance_metric,
+                data->batchCount_gpu[g],
+                kblasGetStream(*(data->kblas_handle[g])));
+        }else if (data->kernel == 2) {
+            for (long long i = 0; i < data->batchCount_gpu[g]; i++){
                 // exponential power kernel
                 cudaDcmg_powexp_strided( 
                     data->d_A_conditioning[g] + i * data->lddacon * data->Acon, 
@@ -83,6 +85,8 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
                     data->locations_con_yy_d[g] + i * data->cs, 
                     localtheta, data->distance_metric,
                     kblasGetStream(*(data->kblas_handle[g])));
+            }
+            for (long long i = 0; i < data->batchCount_gpu[g]; i++){
                 cudaDcmg_powexp_strided( 
                     data->d_A_cross[g] + i * data->lddacon * data->bs, 
                     data->Acon, data->bs, data->lddacon,
@@ -93,7 +97,9 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
                     data->locations_yy_d[g] + i * data->bs, 
                     localtheta, data->distance_metric,
                     kblasGetStream(*(data->kblas_handle[g])));
-            }else if (data->kernel == 3) {
+            }
+        }else if (data->kernel == 3) {
+            for (long long i = 0; i < data->batchCount_gpu[g]; i++){
                 // exponential power kernel with nugget
                 cudaDcmg_powexp_nugget_strided( 
                     data->d_A_conditioning[g] + i * data->lddacon * data->Acon, 
@@ -105,6 +111,8 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
                     data->locations_con_yy_d[g] + i * data->cs, 
                     localtheta, data->distance_metric,
                     kblasGetStream(*(data->kblas_handle[g])));
+            }
+            for (long long i = 0; i < data->batchCount_gpu[g]; i++){
                 cudaDcmg_powexp_nugget_strided( 
                     data->d_A_cross[g] + i * data->lddacon * data->bs, 
                     data->Acon, data->bs, data->lddacon,
@@ -290,7 +298,8 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
         {
             // Launch the kernel
             // fprintf(stderr, "--------------gpu: %d ------------\n", g);
-            // printVecGPU(data->Acon, data->Cn, data->d_A_cross[0] + data->lddacon, data->lddacon, 2);
+            // printVecGPU(data->Acon, data->Cn, data->d_A_cross[0], data->lddacon, 2);
+            // printVecGPU(data->Acon, data->Cn, data->d_C_conditioning[0], data->lddacon, 2);
             DgpuDotProducts_Strided(
                 data->d_A_cross[g], data->d_A_cross[g], 
                 data->d_A_offset_vector[g], 
@@ -311,7 +320,6 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
     }
     clock_gettime(CLOCK_MONOTONIC, &end_qua);
     vecchia_time_quadratic = end_qua.tv_sec - start_qua.tv_sec + (end_qua.tv_nsec - start_qua.tv_nsec) / 1e9;
-    
     // copy
     struct timespec start_copy_dh, end_copy_dh;
     clock_gettime(CLOCK_MONOTONIC, &start_copy_dh);
@@ -354,7 +362,6 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
                 &(data->logdet_result_h[0][0]));
     // data->dot_result_h[0][0] = data->h_mu_offset_matrix[0];
     data->dot_result_h[0][0] = data->h_mu_offset_vector[0];
-
     // scalar vecchia approximation
     // int _sum_batchcmat = 0;
     for (int g=0; g < data->ngpu; g++)
@@ -411,7 +418,8 @@ T llh_Xvecchia_batch(unsigned n, const T* localtheta, T* grad, void* f_data)
     time_copy = time_copy_dh + time_copy_hd;
     if (data->perf == 1){
         std::string _file_path = "./log/perf_locs_" + std::to_string(data->num_loc) + "_" \
-                            + "cs_" + std::to_string(data->cs);
+                            + "cs_" + std::to_string(data->cs) + "_" \
+                            + "seed_" + std::to_string(data->seed);
         const char *file_path = _file_path.c_str();
         FILE *_file = fopen(file_path, "w");
         if (_file == NULL) {

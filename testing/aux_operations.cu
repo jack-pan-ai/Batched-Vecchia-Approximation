@@ -134,6 +134,113 @@ __global__ void Dcmg_matern12_strided_kernel(
 
 }
 
+
+__global__ void Dcmg_matern12_strided_1d_kernel(
+        double *A, 
+        int m, int n, int lddm,
+        // int m0, int n0, 
+        double* l1_x_cuda, double* l1_y_cuda, 
+        double* l2_x_cuda, double* l2_y_cuda,
+        double localtheta0, double localtheta1, 
+        int distance_metric)
+    /*!
+     * Returns covariance matrix tile using the aforementioned kernel.
+     * @param[in] A: 1D array which saves the matrix entries by column.
+     * @param[in] m: number of rows of tile.
+     * @param[in] n: number of columns of tile.
+     * @param[in] lddm: leading dimension of columns of tile.
+     * @param[in] m0: Global row start point of tile.
+     * @param[in] n0: Global column start point of tile.
+     * @param[in] l1_x_cuda: value of x-axis of locaton vector l1.
+     * @param[in] l1_y_cuda: value of y-axis of locaton vector l1.
+     * @param[in] l2_x_cuda: value of x-axis of locaton vector l2.
+     * @param[in] l2_y_cuda: value of y-axis of locaton vector l2.
+     * @param[in] localtheta: there are three parameters to define this kernel.
+     * @param[in] distance_metric: unused arguments
+     * */
+{
+   int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    int mLocal = idx % m;
+    int nLocal = idx / m;
+
+    if(mLocal >= m || nLocal >= n) return;
+
+    double scaled_distance  = 0.0;
+    // double expr1 = 0.0;
+    double sigma_square = localtheta0;
+    scaled_distance = sqrt(
+                pow((l2_x_cuda[nLocal] - l1_x_cuda[mLocal]), 2) +
+                pow((l2_y_cuda[nLocal] - l1_y_cuda[mLocal]), 2)
+            ) / localtheta1;
+
+    A[mLocal + nLocal * lddm] = sigma_square *  
+                    exp(-(scaled_distance)); // power-exp kernel
+    // }
+}
+
+__global__ void Dcmg_matern12_strided_1d_batched_kernel(
+        double *A, 
+        int m, int n, int lddm,
+        int Acon,
+        int repeatNum, int batchCount,
+        // int m0, int n0, 
+        double* l1_x_cuda, double* l1_y_cuda, 
+        double* l2_x_cuda, double* l2_y_cuda,
+        double localtheta0, double localtheta1, 
+        int distance_metric)
+    /*!
+     * Returns covariance matrix tile using the aforementioned kernel.
+     * @param[in] A: 1D array which saves the matrix entries by column.
+     * @param[in] m: number of rows of tile.
+     * @param[in] n: number of columns of tile.
+     * @param[in] lddm: leading dimension of columns of tile.
+     * @param[in] m0: Global row start point of tile.
+     * @param[in] n0: Global column start point of tile.
+     * @param[in] l1_x_cuda: value of x-axis of locaton vector l1.
+     * @param[in] l1_y_cuda: value of y-axis of locaton vector l1.
+     * @param[in] l2_x_cuda: value of x-axis of locaton vector l2.
+     * @param[in] l2_y_cuda: value of y-axis of locaton vector l2.
+     * @param[in] localtheta: there are three parameters to define this kernel.
+     * @param[in] distance_metric: unused arguments
+     * */
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    long long idy = blockIdx.y * blockDim.y + threadIdx.y;
+
+    int mLocal = idx % m;
+    int nLocal = idx / m;
+
+    // A + i * lddm * n, m, n, lddm, 
+    // l1_x_cuda + i * Acon, l1_y_cuda + i * Acon, 
+    // l2_x_cuda + i * n , l2_y_cuda + i * n , 
+    // localtheta[0], localtheta[1], 
+    // distance_metric
+
+    if(mLocal >= m || nLocal >= n) return;
+    for (int i = 0; i < repeatNum; ++i) {
+        if (idy >= batchCount) {
+            return;
+        }
+        double* ALocal = A + idy * lddm * n;
+        double* l1_x_cudaLocal = l1_x_cuda + idy * Acon;
+        double* l1_y_cudaLocal = l1_y_cuda + idy * Acon;
+        double* l2_x_cudaLocal = l2_x_cuda + idy * n;
+        double* l2_y_cudaLocal = l2_y_cuda + idy * n;
+        double scaled_distance  = 0.0;
+        // double expr1 = 0.0;
+        double sigma_square = localtheta0;
+        scaled_distance = sqrt(
+                    pow((l2_x_cudaLocal[nLocal] - l1_x_cudaLocal[mLocal]), 2) +
+                    pow((l2_y_cudaLocal[nLocal] - l1_y_cudaLocal[mLocal]), 2)
+                ) / localtheta1;
+
+        ALocal[mLocal + nLocal * lddm] = sigma_square *  
+                        exp(-(scaled_distance)); // power-exp kernel
+        idy += blockDim.y * gridDim.y;
+    }
+}
+
 __global__ void Dcmg_matern32_strided_kernel(
         double *A, 
         int m, int n, int lddm,
@@ -316,11 +423,12 @@ __global__ void Dcmg_powexp_nugget_strided_kernel_earth_distance(
 
 void cudaDcmg_matern135_2_strided( 
         double *A, 
-        int m, int n, int lddm,
+        int m, int n, int lddm, int Acon,
         // int m0, int n0, 
         double* l1_x_cuda, double* l1_y_cuda, 
         double* l2_x_cuda, double* l2_y_cuda,
-        const double *localtheta, int distance_metric, 
+        const double *localtheta, int distance_metric,
+        int batchCount_gpu, 
         cudaStream_t stream){
 
     // Matern function with fraction 1/2, 3/2, 5/2
@@ -330,35 +438,66 @@ void cudaDcmg_matern135_2_strided(
     dim3 dimBlock(CHUNKSIZE,CHUNKSIZE);
     dim3 dimGrid(nBlockx,nBlocky);
 
-    if (localtheta[2] == 0.5){
-        Dcmg_matern12_strided_kernel<<<dimGrid, dimBlock, 0, stream>>>(
-            A, m, n, lddm, 
+    if (localtheta[2] == 0.5) {
+        int maxBlockNum = 5120;
+        int repeatNum = (batchCount_gpu - 1) / maxBlockNum + 1;
+        const int matrixSize = m * n;
+        dim3 dimBlock(min(matrixSize, 128), 1);
+        dim3 dimGrid((matrixSize - 1) / dimBlock.x + 1, maxBlockNum);
+        Dcmg_matern12_strided_1d_batched_kernel<<<dimGrid, dimBlock, 0, stream>>>(
+            A, m, n, lddm, Acon, repeatNum, batchCount_gpu,
             l1_x_cuda, l1_y_cuda, 
             l2_x_cuda, l2_y_cuda, 
             localtheta[0], localtheta[1], 
             distance_metric
         );
-    }else if (localtheta[2] == 1.5){
-        Dcmg_matern32_strided_kernel<<<dimGrid, dimBlock, 0, stream>>>(
-            A, m, n, lddm, 
-            l1_x_cuda, l1_y_cuda, 
-            l2_x_cuda, l2_y_cuda, 
-            localtheta[0], localtheta[1], 
-            distance_metric
-        );
-    }else if (localtheta[2] == 2.5){
-        Dcmg_matern52_strided_kernel<<<dimGrid, dimBlock, 0, stream>>>(
-            A, m, n, lddm, 
-            l1_x_cuda, l1_y_cuda, 
-            l2_x_cuda, l2_y_cuda, 
-            localtheta[0], localtheta[1], 
-            distance_metric
-        );
-    }else{
-        fprintf(stderr, "Other smoothness setting are still developing. \n");
-        exit(0);
+        return;
     }
-    
+
+    for (long long i = 0; i < batchCount_gpu; i++){
+        if (localtheta[2] == 0.5){
+            // int nBlockx = (m + CHUNKSIZE - 1)/CHUNKSIZE;
+            // int nBlocky = (n + CHUNKSIZE - 1)/CHUNKSIZE;
+            // dim3 dimBlock(CHUNKSIZE,CHUNKSIZE);
+            // dim3 dimGrid(nBlockx,nBlocky);
+            // Dcmg_matern12_strided_kernel<<<dimGrid, dimBlock, 0, stream>>>(
+            //     A + i * lddm * n, m, n, lddm, 
+            //     l1_x_cuda + i * Acon, l1_y_cuda + i * Acon, 
+            //     l2_x_cuda + i * n , l2_y_cuda + i * n , 
+            //     localtheta[0], localtheta[1], 
+            //     distance_metric
+            // );
+            // const int matrixSize = m * n;
+            // dim3 dimBlock(min(matrixSize, 128));
+            // dim3 dimGrid((matrixSize - 1) / dimBlock.x + 1);
+            // Dcmg_matern12_strided_1d_kernel<<<dimGrid, dimBlock, 0, stream>>>(
+            //     A + i * lddm * n, m, n, lddm, 
+            //     l1_x_cuda + i * Acon, l1_y_cuda + i * Acon, 
+            //     l2_x_cuda + i * n , l2_y_cuda + i * n , 
+            //     localtheta[0], localtheta[1], 
+            //     distance_metric
+            // );
+        }else if (localtheta[2] == 1.5){
+            Dcmg_matern32_strided_kernel<<<dimGrid, dimBlock, 0, stream>>>(
+                A + i * lddm * n, m, n, lddm, 
+                l1_x_cuda + i * Acon, l1_y_cuda + i * Acon, 
+                l2_x_cuda + i * n , l2_y_cuda + i * n , 
+                localtheta[0], localtheta[1], 
+                distance_metric
+            );
+        }else if (localtheta[2] == 2.5){
+            Dcmg_matern52_strided_kernel<<<dimGrid, dimBlock, 0, stream>>>(
+                A + i * lddm * n, m, n, lddm, 
+                l1_x_cuda + i * Acon, l1_y_cuda + i * Acon, 
+                l2_x_cuda + i * n , l2_y_cuda + i * n , 
+                localtheta[0], localtheta[1], 
+                distance_metric
+            );
+        }else{
+            fprintf(stderr, "Other smoothness setting are still developing. \n");
+            exit(0);
+        }
+    }
 }
 
 
