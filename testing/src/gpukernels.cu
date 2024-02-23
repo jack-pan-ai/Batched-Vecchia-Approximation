@@ -3,7 +3,7 @@
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
 
-#include "aux_operations.h"
+#include "gpukernels.h"
 
 #define PI (3.141592653589793)
 #define earthRadiusKm (6371.0)

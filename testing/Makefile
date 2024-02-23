@@ -1,13 +1,58 @@
-include ../make.inc
+#-----------------------------------------
+ifndef _USE_OPENBLAS_
+_USE_MKL_?=TRUE
+endif
+#-----------------------------------------
+_USE_MAGMA_?=TRUE
+#-----------------------------------------
+#specify cuda directory
+_CUDA_ROOT_=$(CUDA_HOME)
+_CUDA_ARCH_ ?= 70
 
-# print-%  : ; @echo $* = $($*)
+# specify compilers
+CXX ?= g++
+CC ?= gcc
+NVCC=$(_CUDA_ROOT_)/bin/nvcc
+#customize the name of the static kblas library
+LIB_KBLAS_NAME=kblas-gpu
 
-# ROOTS
-_KBLAS_ROOT_=..
+#-----------------------------------------
+NVOPTS = -ccbin $(CXX) --compiler-options -fno-strict-aliasing
+COPTS = -fopenmp
+
+NVOPTS_3 = -DTARGET_SM=$(_CUDA_ARCH_) -allow-unsupported-compiler -arch sm_$(_CUDA_ARCH_) -Xcompiler -fopenmp
+
+#-----------------------------------------
+ifdef _DEBUG_
+  COPTS += -g -Xcompiler -rdynamic
+  NVOPTS += -G -g -lineinfo
+else
+  COPTS += -O3
+  NVOPTS += -O3
+endif
+
+#-----------------------------------------
+ifdef _USE_MAGMA_
+  COPTS += -DUSE_MAGMA
+  _MAGMA_ROOT_?=$(HOME)/scratch/codes/magma-2.5.2
+  NVOPTS += -DUSE_MAGMA
+endif
+#-----------------------------------------
+ifdef _USE_MKL_
+  COPTS += -DUSE_MKL
+  NVOPTS += -DUSE_MKL
+  _MKL_ROOT_?=${MKLROOT}
+endif
+
+# the source file
+VECCHIA_SOURCE=./src
+VECCHIA_HEADER=./include
+
 
 # include and lib paths
 INCLUDES=
 INCLUDES+= -I.
+INCLUDES+= -I./include
 INCLUDES+= -I${_CUDA_ROOT_}/include
 INCLUDES+= -I${_KBLAS_ROOT_}/include -I${_KBLAS_ROOT_}/src
 INCLUDES+= -I${_NLOPT_ROOT_}/include
@@ -61,32 +106,30 @@ LIB+= -lstdc++
 
 KBLAS_LIB=../lib/lib${LIB_KBLAS_NAME}.a
 
-INC_SRC=ckernel.h
-
 OBJ_DIR=./obj
 BIN_DIR=./bin
 
 
-#$(info $$_SUPPORT_BATCH_TR_ is [${_SUPPORT_BATCH_TR_}])
-ifdef _SUPPORT_BATCH_TR_
-KBLAS_BATCH_DIR=src
-include $(KBLAS_BATCH_DIR)/Makefile
+_VECCHIA_TEST_?=TRUE
+# $(info $$_VECCHIA_TEST_ is [${_VECCHIA_TEST_}])
+ifdef _VECCHIA_TEST_
+include $(VECCHIA_SOURCE)/Makefile
 endif
 
 all: $(EXE_BATCH)
 
-$(OBJ_DIR)/testing_helper.o: testing_helper.cu
+$(OBJ_DIR)/testing_helper.o: $(VECCHIA_SOURCE)/testing_helper.cu
 	$(NVCC) $(NVOPTS) $(NVOPTS_3) $(INCLUDES) $(NVCCFLAGS)  -c $< -o $@
 
 # dotproduct operations
-$(OBJ_DIR)/aux_operations.o: aux_operations.cu
+$(OBJ_DIR)/gpukernels.o: $(VECCHIA_SOURCE)/gpukernels.cu
 	$(NVCC) $(NVOPTS) $(NVOPTS_3) $(INCLUDES) $(NVCCFLAGS)  -c $< -o $@
 
-$(OBJ_DIR)/ckernel.o: ckernel.cpp
+$(OBJ_DIR)/ckernel.o: $(VECCHIA_SOURCE)/ckernel.cpp
 	$(CXX) $(COPTS) $(INCLUDES) -c $< -o $@
 
-$(EXE_BATCH): $(BIN_DIR)/%: $(OBJ_DIR)/%.o $(KBLAS_LIB) $(OBJ_DIR)/testing_helper.o $(OBJ_DIR)/ckernel.o $(OBJ_DIR)/aux_operations.o
-	$(CC) $(COPTS) $(OBJ_DIR)/testing_helper.o $(OBJ_DIR)/ckernel.o $(OBJ_DIR)/aux_operations.o $< -o $@ $(LIB_PATH) $(LIB)
+$(EXE_BATCH): $(BIN_DIR)/%: $(OBJ_DIR)/%.o $(KBLAS_LIB) $(OBJ_DIR)/testing_helper.o $(OBJ_DIR)/ckernel.o $(OBJ_DIR)/gpukernels.o
+	$(CC) $(COPTS) $(OBJ_DIR)/testing_helper.o $(OBJ_DIR)/ckernel.o $(OBJ_DIR)/gpukernels.o $< -o $@ $(LIB_PATH) $(LIB)
 
 clean:
 	rm -f $(OBJ_DIR)/*.o $(EXE_BATCH)

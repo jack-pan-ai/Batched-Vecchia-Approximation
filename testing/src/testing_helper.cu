@@ -92,17 +92,15 @@ void displayHelp()
             << "  --ikernel             The parameters in kernel, sigma^2:range:smooth, e.g., 1.5:0.1:0.5\n"
             << "  --kernel              The name of kernels, such as matern kernel, e.g., univariate_matern_stationary_no_nugget\n"
             << "  --kernel_init         The initial values of parameters in kernel, sigma^2:range:smooth, e.g., 1.5:0.1:0.5\n"
-            << "  --vecchia_bc          [int] The block count in Vecchia method (number of clusters), e.g., 300,\n"
             << "  --vecchia_cs          [int] The conditioning size in Vecchia method, e.g., 1500,\n"
             << "  --num_loc             [int] The number of locations, e.g., 20000,\n"
             << "  --knn                 nearest neighbors searching, default to use.\n"
-            << "  --perf                Only calculate the one iteraion of block/classic Vecchia and obs=0.\n"
+            << "  --perf                Only calculate the one iteraion of classic Vecchia.\n"
             << "  --seed                [int] random generation for locations and observations.\n"
             << "  --xy_path             [string] locations path.\n"
             << "  --obs_path            [string] observations path.\n"
             << "  --tol                 [int] tolerance of BOBYQA, 5 -> 1e-5.\n"
             << "  --omp_threads         [int] number openmp threads, default 40.\n"
-            << "  --permutation         [string] reordering method, default as random, (optional) kdtree, morton, hilber.\n"
             // Add more options as necessary
             << std::endl;
 }
@@ -153,7 +151,6 @@ extern "C" int parse_opts(int argc, char **argv, kblas_opts *opts)
   // vecchia conditioning
   opts->vecchia = 1;
   opts->vecchia_cs = 0;
-  opts->test = 0;
 
   // optimization setting
   opts->tol = 1e-5;
@@ -185,56 +182,11 @@ extern "C" int parse_opts(int argc, char **argv, kblas_opts *opts)
   int ndevices;
   cudaGetDeviceCount(&ndevices);
   int info;
-  int ntest = 0;
+  int ntest = 1;
   for (int i = 1; i < argc; ++i)
   {
-    // ----- matrix size
-    // each -N fills in next entry of msize, nsize, ksize and increments ntest
-    if (strcmp("-N", argv[i]) == 0 && i + 1 < argc)
-    {
-      kblas_assert(ntest < MAX_NTEST, "error: -N %s, max number of tests exceeded, ntest=%d.\n", argv[i], ntest);
-      i++;
-      int m2, n2, k2, q2;
-      info = sscanf(argv[i], "%d:%d:%d:%d", &m2, &n2, &k2, &q2);
-      if (info == 4 && m2 >= 0 && n2 >= 0 && k2 >= 0 && q2 >= 0)
-      {
-        opts->msize[ntest] = m2;
-        opts->nsize[ntest] = n2;
-        opts->ksize[ntest] = k2;
-        opts->rsize[ntest] = q2;
-      }
-      else if (info == 3 && m2 >= 0 && n2 >= 0 && k2 >= 0)
-      {
-        opts->msize[ntest] = m2;
-        opts->nsize[ntest] = n2;
-        opts->ksize[ntest] = k2;
-        opts->rsize[ntest] = k2; // implicitly
-      }
-      else if (info == 2 && m2 >= 0 && n2 >= 0)
-      {
-        opts->msize[ntest] = m2;
-        opts->nsize[ntest] = n2;
-        opts->ksize[ntest] = n2; // implicitly
-        opts->rsize[ntest] = n2; // implicitly
-      }
-      else if (info == 1 && m2 >= 0)
-      {
-        opts->msize[ntest] = m2;
-        opts->nsize[ntest] = m2; // implicitly
-        opts->ksize[ntest] = m2; // implicitly
-        opts->rsize[ntest] = m2; // implicitly
-      }
-      else
-      {
-        fprintf(stderr, "error: -N %s is invalid; ensure m >= 0, n >= 0, k >= 0, info=%d, m2=%d, n2=%d, k2=%d, q2=%d.\n",
-                argv[i], info, m2, n2, k2, q2);
-        exit(1);
-      }
-      ntest++;
-    }
-
     // ----- scalar arguments
-    else if (strcmp("--dev", argv[i]) == 0 && i + 1 < argc)
+    if (strcmp("--dev", argv[i]) == 0 && i + 1 < argc)
     {
       int n;
       info = sscanf(argv[++i], "%d", &n);
@@ -309,11 +261,6 @@ extern "C" int parse_opts(int argc, char **argv, kblas_opts *opts)
       opts->perf = 1;
       opts->maxiter = 1;
     }
-    // used for vecchia conditioning
-    else if (strcmp("--test", argv[i]) == 0)
-    {
-      opts->test = 1;
-    }
     // else if ( strcmp("--vecchia", argv[i]) == 0 ) {
     //    opts->vecchia  = 1;
     //   }
@@ -335,6 +282,20 @@ extern "C" int parse_opts(int argc, char **argv, kblas_opts *opts)
         fprintf(stderr, "error: --vecchia_cs %s is invalid; ensure only one number and 0 < vecchia_cs <= N.\n", argv[i]);
         exit(1);
       }
+    }
+    // real dataset input
+    else if (strcmp(argv[i], "--xy_path") == 0 && i + 1 < argc)
+    {
+      i++;
+      opts->xy_path = argv[i]; // The next argument is the path
+      std::cout << "xy_path: " << opts->xy_path << std::endl;
+    }
+    // real dataset input
+    else if (strcmp(argv[i], "--obs_path") == 0 && i + 1 < argc)
+    {
+      i++;
+      opts->obs_path = argv[i]; // The next argument is the path
+      std::cout << "obs_path: " << opts->obs_path << std::endl;
     }
     // used for optimization
     else if ((strcmp("--maxiter", argv[i]) == 0) && i + 1 < argc)

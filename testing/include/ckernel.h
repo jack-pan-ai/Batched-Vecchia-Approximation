@@ -22,7 +22,7 @@
 #define _CKERNEL_H_
 #include <stdint.h>
 #include <stdlib.h>
-#define assert(ignore)((void) 0)
+// #define assert(ignore)((void) 0)
 
 
 #ifdef __cplusplus

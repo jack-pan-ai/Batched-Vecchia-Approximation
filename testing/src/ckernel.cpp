@@ -18,8 +18,6 @@
 //  * @date 2022-11-09
 //  *
 //  **/
-// #include "../include/exageostatcore.h"
-// #include "assert.h"
 #include <cstdio>
 #include <math.h>
 // #include <gsl/gsl_sf_bessel.h>

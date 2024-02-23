@@ -5,7 +5,7 @@
 #include <iostream>
 #include <cstdio> // For printf
 
-#include "../aux_operations.h"
+#include "gpukernels.h"
 
 template <class T>
 
