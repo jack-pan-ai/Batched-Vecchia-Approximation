@@ -67,7 +67,6 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
     
     size_t batchCount;
 
-    // int nruns = opts.nruns;
     // BLAS language, 
     // A* stands for the covariance matrix 
     // C* stands for the observations
@@ -261,8 +260,8 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
             z_path = "./wind/observation_train_250000";
         }
         data.distance_metric = 1;
-        // std::string xy_path = "./extras/estimation_test/LOC_6400_1";
-        // std::string z_path = "./extras/estimation_test/Z_6400_1";
+        // std::string xy_path = "./extras/estimation_test/20k-2.5-z";
+        // std::string z_path = "./extras/estimation_test/20k-2.5-locs";
         // data.distance_metric = 0;
 
         for (int i =0; i < opts.num_params; i++) ub.push_back(2);
@@ -270,6 +269,7 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
         loadObscsv<T>(z_path, opts.num_loc, h_C_data);
         if (opts.kernel == 1) {
             localtheta_initial = {opts.lower_bound, opts.lower_bound, opts.nu};
+            // localtheta_initial = {1.5, 0.1, 2.5};
         }else if (opts.kernel == 3) {
             // power exponential with nugget effect
             localtheta_initial = {opts.lower_bound, opts.lower_bound, opts.lower_bound, opts.lower_bound};
@@ -300,7 +300,6 @@ int test_Xvecchia_batch(kblas_opts &opts, T alpha)
             fprintf(stderr, "You were using the Morton ordering. \n");
         }
     }
-
     /*
     Locations preparation
     */

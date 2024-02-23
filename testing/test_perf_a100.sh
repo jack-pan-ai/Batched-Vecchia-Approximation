@@ -1,7 +1,7 @@
 #!/bin/bash
 
 for seed in 0 1 2 3 4
-done
+do
     Nbs=1
     for num_N in 40000 80000 120000 160000 200000 280000 360000 420000 500000 600000 700000 800000 900000 1000000
     do
@@ -12,5 +12,5 @@ done
     done
 done
 mkdir ./log/a100
-mv ./log/locs* ./log/a100
+rm ./log/locs*
 mv ./log/perf* ./log/a100

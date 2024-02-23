@@ -10,5 +10,5 @@ do
 done
 
 mkdir ./log/h100
-mv ./log/locs* ./log/h100
+rm ./log/locs*
 mv ./log/perf* ./log/h100

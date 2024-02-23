@@ -13,4 +13,4 @@ do
 done
 # mkdir ./log/v100
 rm ./log/locs*
-# mv ./log/perf* ./log/v100
+mv ./log/perf* ./log/v100
